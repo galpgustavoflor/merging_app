@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import json
+import concurrent.futures
 
 # O limite de upload deve ser definido no arquivo config.toml ou via linha de comando
 # Exemplo de linha de comando: streamlit run script.py --server.maxUploadSize=500
@@ -30,16 +31,44 @@ if 'show_json' not in st.session_state:
 
 def carregar_arquivo(uploaded_file):
     """
-    Carrega um arquivo Excel ou CSV de dados, lidando com problemas de formatação.
+    Carrega um arquivo Excel ou CSV de dados, lidando com problemas de formatação e colunas duplicadas.
     """
     try:
         st.write(f"Carregando arquivo: {uploaded_file.name}")
         if uploaded_file.name.endswith('.xlsx'):
-            return pd.read_excel(uploaded_file).convert_dtypes()
+            df = pd.read_excel(uploaded_file, engine='openpyxl').convert_dtypes()
         elif uploaded_file.name.endswith('.csv'):
-            return pd.read_csv(uploaded_file, sep=None, engine='python', on_bad_lines='skip').convert_dtypes()
+            df = pd.read_csv(uploaded_file, sep=None, engine='python', on_bad_lines='skip').convert_dtypes()
         else:
             raise ValueError("Formato de arquivo não suportado. Use .xlsx ou .csv")
+        
+        # Remover possíveis espaços e caracteres invisíveis nos nomes das colunas
+        df.columns = df.columns.str.strip().str.replace("\ufeff", "", regex=True)
+        
+        # Identificar colunas duplicadas geradas automaticamente pelo pandas e renomeá-las
+        colunas_renomeadas = []
+        colunas_vistas = {}
+        novas_colunas = []
+        #st.write(df.columns)
+        for idx, col in enumerate(df.columns):
+            if col in colunas_vistas:
+                st.write(col)
+                colunas_vistas[col] += 1
+                novo_nome = f"{col}.{colunas_vistas[col]}"
+                colunas_renomeadas.append((col, novo_nome))
+                novas_colunas.append(novo_nome)
+            else:
+                colunas_vistas[col] = 1
+                novas_colunas.append(col)
+        
+        df.columns = novas_colunas
+        
+        if colunas_renomeadas:
+            st.write("### Colunas renomeadas devido a duplicação detectada")
+            df_renomeadas = pd.DataFrame(colunas_renomeadas, columns=["Coluna Original", "Novo Nome"])
+            st.dataframe(df_renomeadas)
+        
+        return df
     except Exception as e:
         st.error(f"Erro ao carregar arquivo: {e}")
         return None
@@ -64,75 +93,99 @@ def exibir_metadados(df, titulo):
         null_counts.columns = ['Coluna', 'Valores Nulos']
         fig_nulls = px.bar(null_counts, x='Coluna', y='Valores Nulos', title='Valores Nulos por Coluna')
         st.plotly_chart(fig_nulls)
-
-
+    
 def aplicar_regras(df, mapping):
     """
-    Aplica as regras de mapeamento apenas às colunas especificadas.
+    Aplica as regras de mapeamento, incluindo agregações e conversões.
     """
     st.write("Aplicando regras de mapeamento...")
-    colunas_mapeadas = [regras["destinos"] for col, regras in mapping.items() if "destinos" in regras]
-    colunas_mapeadas = [item for sublist in colunas_mapeadas for item in sublist]
-    df = df[[col for col in colunas_mapeadas if col in df.columns]]  # Mantém apenas colunas citadas no JSON
+    st.write(mapping)
     
+    # Filtrar colunas relevantes
+    colunas_mapeadas = [col for col, regras in mapping.items() if "destinos" in regras]
+    colunas_agrupamento = st.session_state.chave_origem + colunas_mapeadas
+    df = df[[col for col in colunas_agrupamento if col in df.columns]]
+    
+    # Aplicar agregações
+    agregacoes = {}
     for col, regras in mapping.items():
-        if "destinos" not in regras:
-            continue
-        for dest_col in regras["destinos"]:
-            if dest_col not in df.columns:
-                st.warning(f"A coluna '{dest_col}' não foi encontrada no DataFrame. Ignorando transformação.")
-                continue
-            
-            st.write(f"Aplicando {regras['funcao']} na coluna {dest_col}")
-            
-            if regras["funcao"] == "Direct Match":
-                continue  # Comparação direta não exige transformação
-            elif regras["funcao"] == "Aggregation":
-                df = df.groupby(st.session_state.chave_origem).agg({dest_col: regras["transformacao"]}).reset_index()
-            elif regras["funcao"] == "Conversion":
+        if regras["funcao"] == "Aggregation":
+            for dest_col in regras["destinos"]:
+                agregacoes[dest_col] = regras["transformacao"]
+    
+    if agregacoes:
+        df = df.groupby(st.session_state.chave_origem).agg(agregacoes).reset_index()
+    
+    # Aplicar conversões
+    for col, regras in mapping.items():
+        if regras["funcao"] == "Conversion":
+            for dest_col in regras["destinos"]:
                 try:
                     conversion_dict = json.loads(regras["transformacao"])
                     df[dest_col] = df[dest_col].map(conversion_dict).fillna(df[dest_col])
                 except json.JSONDecodeError:
                     st.error(f"Erro na conversão da coluna {dest_col}: JSON inválido.")
+    
     return df
+
+def process_chunk(df_origem_chunk, df_destino, chave_origem, chave_destino):
+    df_merged = df_origem_chunk.merge(
+        df_destino,
+        left_on=chave_origem,
+        right_on=chave_destino,
+        how='outer',
+        indicator=True
+    )
+    return df_merged
 
 def executar_matching():
     """
-    Executa a comparação entre os datasets com base nas regras de matching, utilizando apenas as colunas do JSON.
+    Executa o processo de matching usando processamento em lotes para reduzir o consumo de memória.
     """
-    st.write("Executando matching...")
-    df_origem = aplicar_regras(st.session_state.df_origem.copy(), st.session_state.mapping["mapeamentos"])
-    df_destino = aplicar_regras(st.session_state.df_destino.copy(), st.session_state.mapping["mapeamentos"])
+    st.write("Executando matching em lotes para otimização de memória...")
+    chunk_size = 10000  # Define o tamanho do lote para evitar sobrecarga de memória
     
-    # Normalizar tipos de dados antes do merge
+    df_origem = st.session_state.df_origem.copy()
+    df_destino = st.session_state.df_destino.copy()
+    
+    # Converter colunas numéricas para tipos menores
+    for col in df_origem.select_dtypes(include=['int64', 'float64']).columns:
+        df_origem[col] = pd.to_numeric(df_origem[col], downcast='integer')
+    for col in df_destino.select_dtypes(include=['int64', 'float64']).columns:
+        df_destino[col] = pd.to_numeric(df_destino[col], downcast='integer')
+    
+    # Normalizar chaves
     for col_origem, col_destino in zip(st.session_state.mapping["chave_origem"], st.session_state.mapping["chave_destino"]):
         if col_origem in df_origem.columns and col_destino in df_destino.columns:
-            st.write(f"Normalizando tipos: {col_origem} e {col_destino}")
             df_origem[col_origem] = df_origem[col_origem].astype(str)
             df_destino[col_destino] = df_destino[col_destino].astype(str)
-    st.write("Realizando merge dos datasets...")
-
-    # Verificar chaves de origem e destino
-    missing_keys = [col for col in st.session_state.mapping["chave_origem"] if col not in st.session_state.mapping["chave_destino"]]
-    if missing_keys:
-        st.error(f"Estas chaves não possuem correspondência no destino: {missing_keys}")
-        return
     
-    df_merged = df_origem.merge(df_destino, left_on=st.session_state.mapping["chave_origem"],
-                                right_on=st.session_state.mapping["chave_destino"],
-                                how='outer', indicator=True)
+    # Processamento em lotes com paralelismo
+    resultado = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = []
+        for i in range(0, len(df_origem), chunk_size):
+            df_origem_chunk = df_origem.iloc[i:i+chunk_size]
+            st.write(f"{i+chunk_size} linhas processadas...")
+            chave_origem = st.session_state.mapping["chave_origem"]
+            chave_destino = st.session_state.mapping["chave_destino"]
+            futures.append(executor.submit(process_chunk, df_origem_chunk, df_destino, chave_origem, chave_destino))
+        
+        for future in concurrent.futures.as_completed(futures):
+            resultado.append(future.result())
+    
+    df_final = pd.concat(resultado, ignore_index=True)
     
     st.write("### Resumo do Matching")
-    st.write(f"Total de registros correspondentes: {len(df_merged[df_merged['_merge'] == 'both'])}")
-    st.write(f"Total de registros faltantes na origem: {len(df_merged[df_merged['_merge'] == 'right_only'])}")
-    st.write(f"Total de registros faltantes no destino: {len(df_merged[df_merged['_merge'] == 'left_only'])}")
+    st.write(f"Total de registros correspondentes: {len(df_final[df_final['_merge'] == 'both'])}")
+    st.write(f"Total de registros faltantes na origem: {len(df_final[df_final['_merge'] == 'right_only'])}")
+    st.write(f"Total de registros faltantes no destino: {len(df_final[df_final['_merge'] == 'left_only'])}")
     
     st.write("### Registros Correspondentes")
-    st.dataframe(df_merged[df_merged['_merge'] == 'both'])
+    st.dataframe(df_final[df_final['_merge'] == 'both'])
     
     st.write("### Registros Não Correspondentes")
-    st.dataframe(df_merged[df_merged['_merge'] != 'both'])
+    st.dataframe(df_final[df_final['_merge'] != 'both'])
 
 # Interface Streamlit
 st.title("Processo de Mapeamento de Arquivos")
