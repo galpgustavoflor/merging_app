@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import json
 import concurrent.futures
+import dask.dataframe as dd
 
 # O limite de upload deve ser definido no arquivo config.toml ou via linha de comando
 # Exemplo de linha de comando: streamlit run script.py --server.maxUploadSize=500
@@ -19,6 +20,12 @@ if 'df_destino' not in st.session_state:
 
 if 'mapping' not in st.session_state:
     st.session_state.mapping = {}
+
+if 'validation' not in st.session_state:
+    st.session_state.business_rules = {}
+
+if 'validation_rules' not in st.session_state:
+    st.session_state.validation_rules = {}
 
 if 'chave_origem' not in st.session_state:
     st.session_state.chave_origem = []
@@ -49,7 +56,7 @@ def carregar_arquivo(uploaded_file):
         colunas_renomeadas = []
         colunas_vistas = {}
         novas_colunas = []
-        #st.write(df.columns)
+
         for idx, col in enumerate(df.columns):
             if col in colunas_vistas:
                 st.write(col)
@@ -99,7 +106,6 @@ def aplicar_regras(df, mapping):
     Aplica as regras de mapeamento, incluindo agregações e conversões.
     """
     st.write("Aplicando regras de mapeamento...")
-    st.write(mapping)
     
     # Filtrar colunas relevantes
     colunas_mapeadas = [col for col, regras in mapping.items() if "destinos" in regras]
@@ -128,64 +134,52 @@ def aplicar_regras(df, mapping):
     
     return df
 
-def process_chunk(df_origem_chunk, df_destino, chave_origem, chave_destino):
-    df_merged = df_origem_chunk.merge(
-        df_destino,
-        left_on=chave_origem,
-        right_on=chave_destino,
-        how='outer',
+def executar_matching_dask():
+    """
+    Executa o processo de matching usando Dask para manipular grandes volumes de dados
+    diretamente a partir de um DataFrame Pandas já carregado.
+    """
+    st.write("Executando matching ...")
+
+    df_origem = st.session_state.df_origem  # Já carregado como Pandas
+    df_destino = st.session_state.df_destino  # Já carregado como Pandas
+
+    chave_origem = st.session_state.chave_origem
+    chave_destino = st.session_state.chave_destino
+
+    # Converter df_origem para um DataFrame Dask para processar em paralelo
+    ddf_origem = dd.from_pandas(df_origem, npartitions=10)  # Divide em 10 partições
+    ddf_destino = dd.from_pandas(df_destino, npartitions=10)
+
+    # Realizar o merge usando Dask
+    ddf_final = ddf_origem.merge(
+        ddf_destino, 
+        left_on=chave_origem, 
+        right_on=chave_destino, 
+        how="outer", 
         indicator=True
     )
-    return df_merged
 
-def executar_matching():
-    """
-    Executa o processo de matching usando processamento em lotes para reduzir o consumo de memória.
-    """
-    st.write("Executando matching em lotes para otimização de memória...")
-    chunk_size = 10000  # Define o tamanho do lote para evitar sobrecarga de memória
-    
-    df_origem = st.session_state.df_origem.copy()
-    df_destino = st.session_state.df_destino.copy()
-    
-    # Converter colunas numéricas para tipos menores
-    for col in df_origem.select_dtypes(include=['int64', 'float64']).columns:
-        df_origem[col] = pd.to_numeric(df_origem[col], downcast='integer')
-    for col in df_destino.select_dtypes(include=['int64', 'float64']).columns:
-        df_destino[col] = pd.to_numeric(df_destino[col], downcast='integer')
-    
-    # Normalizar chaves
-    for col_origem, col_destino in zip(st.session_state.mapping["chave_origem"], st.session_state.mapping["chave_destino"]):
-        if col_origem in df_origem.columns and col_destino in df_destino.columns:
-            df_origem[col_origem] = df_origem[col_origem].astype(str)
-            df_destino[col_destino] = df_destino[col_destino].astype(str)
-    
-    # Processamento em lotes com paralelismo
-    resultado = []
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = []
-        for i in range(0, len(df_origem), chunk_size):
-            df_origem_chunk = df_origem.iloc[i:i+chunk_size]
-            st.write(f"{i+chunk_size} linhas processadas...")
-            chave_origem = st.session_state.mapping["chave_origem"]
-            chave_destino = st.session_state.mapping["chave_destino"]
-            futures.append(executor.submit(process_chunk, df_origem_chunk, df_destino, chave_origem, chave_destino))
-        
-        for future in concurrent.futures.as_completed(futures):
-            resultado.append(future.result())
-    
-    df_final = pd.concat(resultado, ignore_index=True)
-    
+    # Exibir resumo do Matching
+    total_match = ddf_final[ddf_final['_merge'] == 'both'].shape[0].compute()
+    faltantes_origem = ddf_final[ddf_final['_merge'] == 'right_only'].shape[0].compute()
+    faltantes_destino = ddf_final[ddf_final['_merge'] == 'left_only'].shape[0].compute()
+
     st.write("### Resumo do Matching")
-    st.write(f"Total de registros correspondentes: {len(df_final[df_final['_merge'] == 'both'])}")
-    st.write(f"Total de registros faltantes na origem: {len(df_final[df_final['_merge'] == 'right_only'])}")
-    st.write(f"Total de registros faltantes no destino: {len(df_final[df_final['_merge'] == 'left_only'])}")
-    
+    st.write(f"Total de registros correspondentes: {total_match}")
+    st.write(f"Total de registros faltantes na origem: {faltantes_origem}")
+    st.write(f"Total de registros faltantes no destino: {faltantes_destino}")
+
+    # Converter de volta para Pandas para exibir no Streamlit (somente amostra para evitar problemas de memória)
+    df_final_sample = ddf_final.compute().sample(n=min(500, len(ddf_final)), random_state=42)  # Exibir 500 amostras
+
     st.write("### Registros Correspondentes")
-    st.dataframe(df_final[df_final['_merge'] == 'both'])
-    
+    st.dataframe(df_final_sample[df_final_sample['_merge'] == 'both'])
+
     st.write("### Registros Não Correspondentes")
-    st.dataframe(df_final[df_final['_merge'] != 'both'])
+    st.dataframe(df_final_sample[df_final_sample['_merge'] != 'both'])
+
+    return ddf_final  # Mantém como Dask para manipulação eficiente
 
 # Interface Streamlit
 st.title("Processo de Mapeamento de Arquivos")
@@ -253,6 +247,58 @@ if st.session_state.step == 4:
     st.header("Etapa 4: Execução do Matching")
     if st.session_state.chave_origem and st.session_state.chave_destino:
         st.write("Processo de Matching em execução...")
-        executar_matching()
+        matching_results = executar_matching_dask()
+        st.session_state.matching_results = matching_results[matching_results['_merge'] == 'both']
     else:
         st.warning("Defina uma chave de busca válida antes de executar a verificação.")
+    
+    if st.button("Configurar validações de dados"):
+        st.session_state.step = 5
+        st.rerun()
+
+if st.session_state.step == 5:
+    st.header("Etapa 5: Mapeamento de Regras de Negócio")
+
+    business_rules_config = {}
+
+    st.subheader("Validações Diretas")
+    validation_rules = {}
+    for col in st.session_state.df_destino.columns:
+        with st.popover(f"Configurar validação para '{col}'"):
+            validate_nulls = st.checkbox("Verificar Nulos", key=f"nulls_{col}")
+            validate_unique = st.checkbox("Verificar Unicidade", key=f"unique_{col}")
+            validate_domain = st.checkbox("Verificar Lista de Valores (separados por virgula)", key=f"domain_{col}")
+            domain_values = []
+            if validate_domain:
+                domain_values = st.text_input("Valores Permitidos", key=f"domain_values_{col}")
+            validate_regex = st.checkbox("Verificar Formato (Regex)", key=f"regex_{col}")
+            regex_pattern = ""
+            if validate_regex:
+                regex_pattern = st.text_input("Expressão Regular", key=f"regex_pattern_{col}")
+            if validate_nulls or validate_unique or validate_domain or validate_regex:
+                validation_rules[col] = {}
+            if validate_nulls:
+                validation_rules[col]["validar_nulos"] = True
+            if validate_unique:
+                validation_rules[col]["validar_unicidade"] = True
+            if validate_domain:
+                validation_rules[col]["validar_lista_de_valores"] = domain_values.split(',')
+            if validate_regex:
+                validation_rules[col]["validar_regex"] = regex_pattern
+    
+    st.session_state.validation_rules = validation_rules
+
+
+    if st.checkbox("Mostrar Configuração de Validação (JSON)", value=False, key="show_json"):
+        st.json(st.session_state.validation_rules)
+
+
+
+
+
+    if st.button("Próxima Etapa"):
+        st.session_state.step = 6
+        st.rerun()
+
+if st.session_state.step == 6:
+    st.header("Etapa 6: Validação de Dados")
