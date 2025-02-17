@@ -3,11 +3,14 @@ from typing import List
 
 FILE_TYPES: List[str] = ["csv", "xlsx"]
 
-class Column:
-    ORIGINAL = "Original Column"
-    NEW_NAME = "New Name"
-    NAME = "Column"
-    NULL_VALUES = "Null Values"
+class Column(Enum):
+    NAME = 'name'
+    AMOUNT = 'amount'
+    DATE = 'date'
+    ID = 'id'
+    VALUE = 'value'
+    MATCHED = 'matched'
+    NULL_VALUES = ['', 'null', 'NULL', 'nan', 'NaN', 'None']
 
 class ValidationRule(Enum):
     VALIDATE_NULLS = "validate_nulls"
