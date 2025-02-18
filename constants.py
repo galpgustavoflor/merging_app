@@ -21,10 +21,6 @@ class ValidationRule(Enum):
     MIN_VALUE = "min_value"
     MAX_VALUE = "max_value"
 
-class RangeValidation:
-    MIN_VALUE = "min_value"
-    MAX_VALUE = "max_value"
-
 class Functions(Enum):
     DIRECT_MATCH = "Direct Match"
     AGGREGATION = "Aggregation"
