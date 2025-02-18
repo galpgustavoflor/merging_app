@@ -147,11 +147,11 @@ def handle_matching_execution():
     
     if st.button("Step Back"):
         st.session_state.step = 3
-        st.experimental_rerun()
+        st.rerun()
     
     if st.button("Configure Data Validations"):
         st.session_state.step = 5
-        st.experimental_rerun()
+        st.rerun()
 
 def handle_validation_rules():
     st.header("Step 5: Define Validation Rules")
