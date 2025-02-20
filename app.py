@@ -5,6 +5,7 @@ import numpy as np
 import plotly.express as px
 import json
 import hashlib  # add import at top if not already imported
+import datetime  # <-- new import for timestamp
 
 from config import DASK_CONFIG, STREAMLIT_CONFIG, VALIDATION_CONFIG
 from constants import FILE_TYPES, Column, ValidationRule as VRule, Functions, Step, STEP_LABELS
@@ -14,33 +15,35 @@ from state import SessionState
 logger = logging.getLogger(__name__)
 
 def inject_custom_css():
+    # Updated CSS injection for modern, clean styling; ensure styles.css is updated accordingly.
     with open('styles.css') as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 def render_breadcrumbs():
     with st.container():
-        st.markdown('<div class="breadcrumb-container">', unsafe_allow_html=True)
+        # Removed aggressive white background and padding for a minimalistic look
+        st.markdown('<div class="breadcrumb-container" style="display: flex; justify-content: center; gap: 1em; margin-bottom: 1em;">', unsafe_allow_html=True)
         cols = st.columns(len(STEP_LABELS))
         for i, (step, label) in enumerate(STEP_LABELS.items()):
             with cols[i]:
                 if step < st.session_state.step:
-                    if st.button(f"✓ {label}", key=f"bread_{step}"):
+                    if st.button(f"✔ {label}", key=f"bread_{step}", help="Go to this step"):
                         st.session_state.step = step
                         st.rerun()
                 elif step == st.session_state.step:
-                    st.markdown(f'<div class="breadcrumb-active">🔵 {label}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="breadcrumb-active" style="color: #FF6600; font-weight: bold;">● {label}</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<div class="breadcrumb-pending">⚪ {label}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="breadcrumb-pending" style="color: #B0BEC5;">○ {label}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 def step_navigation(back=True, next=True, next_label="Next Step"):
     cols = st.columns(2)
     if back and st.session_state.step > Step.SOURCE_UPLOAD:
-        if cols[0].button("← Back", key="back_button"):
+        if cols[0].button("← Back", key="back_button", help="Go to previous step", use_container_width=True):
             st.session_state.step -= 1
             st.rerun()
     if next:
-        if cols[1].button(f"{next_label} →", key="next_button"):
+        if cols[1].button(f"{next_label} →", key="next_button", help="Proceed to next step", use_container_width=True):
             st.session_state.step += 1
             st.rerun()
 
@@ -48,14 +51,18 @@ def main():
     st.set_page_config(
         page_title=STREAMLIT_CONFIG["page_title"],
         layout="wide",
-        initial_sidebar_state="collapsed"
+        initial_sidebar_state="collapsed",
+        page_icon="🍊"  # Updated to reflect the orange branding
     )
     
     inject_custom_css()
     
     with st.container():
+        # Updated modern header with orange accent and futuristic typography
         st.markdown(
-            '<h1 class="main-title">File Mapping and Validation Process</h1>',
+            '<h1 class="main-title" style="text-align: center; font-size: 3em; margin-bottom: 0.5em; color: #FF6600; font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif;">'
+            'File Mapping &amp; Validation'
+            '</h1>',
             unsafe_allow_html=True
         )
     
@@ -392,6 +399,13 @@ def handle_report_summary():
         "validation_results": validation_results
     }
     report_json = json.dumps(report, indent=4, default=lambda o: int(o) if isinstance(o, (np.integer)) else o)
+    # Compute report checksum and timestamp
+    report_checksum = hashlib.sha256(report_json.encode('utf-8')).hexdigest()
+    timestamp = datetime.datetime.now().isoformat()
+    
+    st.markdown(f"<div style='margin-top: 1em;'><strong>Report Generated At:</strong> {timestamp}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div><strong>Report Checksum (SHA256):</strong> {report_checksum}</div>", unsafe_allow_html=True)
+    
     st.download_button("Download Audit Report (JSON)", data=report_json, file_name="audit_report.json", mime="application/json")
     
     step_navigation(next=False)
@@ -478,11 +492,12 @@ def display_detailed_validation_results(df: pd.DataFrame, validation_results: li
                     min_val = validation_rules[col].get(VRule.MIN_VALUE.value)
                     max_val = validation_rules[col].get(VRule.MAX_VALUE.value)
                     numeric_col = pd.to_numeric(df[col], errors='coerce')
-                    condition = numeric_col.notnull()
+                    # Combine conditions: flag values less than min OR greater than max
+                    condition = pd.Series(False, index=numeric_col.index)
                     if min_val is not None:
-                        condition &= (numeric_col < float(min_val))
+                        condition |= (numeric_col < float(min_val))
                     if max_val is not None:
-                        condition &= (numeric_col > float(max_val))
+                        condition |= (numeric_col > float(max_val))
                     filtered_df = df[condition]
                 
                 if filtered_df is not None:

@@ -55,10 +55,14 @@
 <li class="toctree-l3"><a class="reference internal" href="#app.handle_data_validation"><code class="docutils literal notranslate"><span class="pre">handle_data_validation()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#app.handle_mapping_rules"><code class="docutils literal notranslate"><span class="pre">handle_mapping_rules()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#app.handle_matching_execution"><code class="docutils literal notranslate"><span class="pre">handle_matching_execution()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#app.handle_report_summary"><code class="docutils literal notranslate"><span class="pre">handle_report_summary()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#app.handle_source_file_upload"><code class="docutils literal notranslate"><span class="pre">handle_source_file_upload()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#app.handle_target_file_upload"><code class="docutils literal notranslate"><span class="pre">handle_target_file_upload()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#app.handle_validation_rules"><code class="docutils literal notranslate"><span class="pre">handle_validation_rules()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#app.inject_custom_css"><code class="docutils literal notranslate"><span class="pre">inject_custom_css()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#app.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#app.render_breadcrumbs"><code class="docutils literal notranslate"><span class="pre">render_breadcrumbs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#app.step_navigation"><code class="docutils literal notranslate"><span class="pre">step_navigation()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#utilities">Utilities</a><ul>
@@ -76,6 +80,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#utils.FileLoader.load_file"><code class="docutils literal notranslate"><span class="pre">FileLoader.load_file()</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="#utils.clean_dataframe_for_display"><code class="docutils literal notranslate"><span class="pre">clean_dataframe_for_display()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#utils.execute_matching_dask"><code class="docutils literal notranslate"><span class="pre">execute_matching_dask()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#utils.handle_large_file"><code class="docutils literal notranslate"><span class="pre">handle_large_file()</span></code></a></li>
 </ul>
@@ -159,6 +164,11 @@
 <dd></dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="app.handle_report_summary">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">handle_report_summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/app.html#handle_report_summary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.handle_report_summary" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="app.handle_source_file_upload">
 <span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">handle_source_file_upload</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/app.html#handle_source_file_upload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.handle_source_file_upload" title="Link to this definition"></a></dt>
 <dd></dd></dl>
@@ -174,8 +184,23 @@
 <dd></dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="app.inject_custom_css">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">inject_custom_css</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/app.html#inject_custom_css"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.inject_custom_css" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="app.main">
 <span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/app.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.main" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.render_breadcrumbs">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">render_breadcrumbs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/app.html#render_breadcrumbs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.render_breadcrumbs" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.step_navigation">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">step_navigation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">back</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">next</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">next_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Next</span> <span class="pre">Step'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/app.html#step_navigation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.step_navigation" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </section>
@@ -222,6 +247,12 @@
 <em class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uploaded_file</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame" title="(in pandas v2.2.3)"><span class="pre">DataFrame</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../_modules/utils.html#FileLoader.load_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.FileLoader.load_file" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.clean_dataframe_for_display">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">clean_dataframe_for_display</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame" title="(in pandas v2.2.3)"><span class="pre">DataFrame</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame" title="(in pandas v2.2.3)"><span class="pre">DataFrame</span></a></span></span><a class="reference internal" href="../_modules/utils.html#clean_dataframe_for_display"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.clean_dataframe_for_display" title="Link to this definition"></a></dt>
+<dd><p>Clean and convert DataFrame types for Arrow compatibility.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -281,7 +312,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2023.</p>
+    <p>&#169; Copyright 2025.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
