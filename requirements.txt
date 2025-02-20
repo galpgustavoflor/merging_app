@@ -8,3 +8,4 @@ numpy>=1.24.0
 dask>=2023.5.0
 plotly>=5.14.0
 openpyxl>=3.1.2
+fpdf>=1.7.2

@@ -6,6 +6,7 @@ import plotly.express as px
 import json
 import hashlib  # add import at top if not already imported
 import datetime  # <-- new import for timestamp
+from fpdf import FPDF  # new import for PDF generation
 
 from config import DASK_CONFIG, STREAMLIT_CONFIG, VALIDATION_CONFIG
 from constants import FILE_TYPES, Column, ValidationRule as VRule, Functions, Step, STEP_LABELS
@@ -15,7 +16,7 @@ from state import SessionState
 logger = logging.getLogger(__name__)
 
 def inject_custom_css():
-    # Updated CSS injection for modern, clean styling; ensure styles.css is updated accordingly.
+    """Inject custom CSS for modern styling."""
     with open('styles.css') as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
@@ -29,7 +30,7 @@ def render_breadcrumbs():
                 if step < st.session_state.step:
                     if st.button(f"✔ {label}", key=f"bread_{step}", help="Go to this step"):
                         st.session_state.step = step
-                        st.rerun()
+                        st.rerun()  # updated rerun call
                 elif step == st.session_state.step:
                     st.markdown(f'<div class="breadcrumb-active" style="color: #FF6600; font-weight: bold;">● {label}</div>', unsafe_allow_html=True)
                 else:
@@ -37,17 +38,19 @@ def render_breadcrumbs():
         st.markdown('</div>', unsafe_allow_html=True)
 
 def step_navigation(back=True, next=True, next_label="Next Step"):
+    """Render navigation buttons."""
     cols = st.columns(2)
     if back and st.session_state.step > Step.SOURCE_UPLOAD:
         if cols[0].button("← Back", key="back_button", help="Go to previous step", use_container_width=True):
             st.session_state.step -= 1
-            st.rerun()
+            st.rerun()  # updated rerun call
     if next:
         if cols[1].button(f"{next_label} →", key="next_button", help="Proceed to next step", use_container_width=True):
             st.session_state.step += 1
-            st.rerun()
+            st.rerun()  # updated rerun call
 
 def main():
+    """Main entry point for the Streamlit app."""
     st.set_page_config(
         page_title=STREAMLIT_CONFIG["page_title"],
         layout="wide",
@@ -214,7 +217,8 @@ def handle_matching_execution():
 def handle_validation_rules():
     st.header("Step 5: Define Validation Rules")
     
-    if not st.session_state.get("matching_results") is not None:
+    # Fixed check for matching results before proceeding
+    if st.session_state.get("matching_results") is None:
         st.error("Please complete the matching step first.")
         step_navigation(next=False)
         return
@@ -387,7 +391,7 @@ def handle_report_summary():
     else:
         st.info("No validation results available.")
     
-    # Prepare a downloadable report (JSON format) with a custom converter for numpy types
+    # Prepare a downloadable report (JSON content used for PDF)
     report = {
         "data_audit": {
             "source": source_summary,
@@ -406,9 +410,127 @@ def handle_report_summary():
     st.markdown(f"<div style='margin-top: 1em;'><strong>Report Generated At:</strong> {timestamp}</div>", unsafe_allow_html=True)
     st.markdown(f"<div><strong>Report Checksum (SHA256):</strong> {report_checksum}</div>", unsafe_allow_html=True)
     
-    st.download_button("Download Audit Report (JSON)", data=report_json, file_name="audit_report.json", mime="application/json")
+    # Generate PDF report using report_json as content
+    pdf_data = generate_pdf_report(report_json, source_summary, target_summary, checksum_note, mapping, matching_results, validation_config, validation_results)
+    st.download_button("Download Audit Report (PDF)", data=pdf_data, file_name="audit_report.pdf", mime="application/pdf")
     
     step_navigation(next=False)
+
+def generate_pdf_report(content: str, source_summary: dict, target_summary: dict, checksum_note: str, mapping: dict, matching_results: pd.DataFrame, validation_config: dict, validation_results: list) -> bytes:
+    # Create a PDF report with a corporate design
+    pdf = FPDF()
+    pdf.add_page()
+    # Corporate header
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Corporate Audit Report", ln=True, align="C")
+    pdf.ln(5)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, "Confidential", ln=True, align="C")
+    pdf.ln(10)
+    # Report content using same information from the last step
+    pdf.set_font("Arial", "", 10)
+    for line in content.splitlines():
+        pdf.multi_cell(0, 8, line)
+    # Add footer with timestamp and checksum
+    pdf.ln(10)
+    pdf.set_font("Arial", "I", 8)
+    pdf.cell(0, 10, f"Report Generated At: {datetime.datetime.now().isoformat()}", ln=True, align="L")
+    pdf.cell(0, 10, f"Report Checksum (SHA256): {hashlib.sha256(content.encode('utf-8')).hexdigest()}", ln=True, align="L")
+    
+    # Add graphics and styling to match the last page
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Data Audit Summary", ln=True, align="L")
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, "Source Dataset:", ln=True, align="L")
+    pdf.cell(0, 10, f"Rows: {source_summary['rows']}, Columns: {source_summary['columns']}", ln=True, align="L")
+    pdf.cell(0, 10, f"Checksum (SHA256): {source_summary['checksum']}", ln=True, align="L")
+    pdf.ln(5)
+    pdf.cell(0, 10, "Target Dataset:", ln=True, align="L")
+    pdf.cell(0, 10, f"Rows: {target_summary['rows']}, Columns: {target_summary['columns']}", ln=True, align="L")
+    pdf.cell(0, 10, f"Checksum (SHA256): {target_summary['checksum']}", ln=True, align="L")
+    pdf.ln(10)
+    pdf.cell(0, 10, f"Checksum Note: {checksum_note}", ln=True, align="L")
+    
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Mapping Configuration", ln=True, align="L")
+    pdf.set_font("Arial", "", 12)
+    if mapping:
+        pdf.cell(0, 10, f"Source Key(s): {', '.join(mapping.get('key_source', []))}", ln=True, align="L")
+        pdf.cell(0, 10, f"Target Key(s): {', '.join(mapping.get('key_target', []))}", ln=True, align="L")
+        pdf.ln(5)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(40, 10, "Column", 1)
+        pdf.cell(60, 10, "Destinations", 1)
+        pdf.cell(40, 10, "Function", 1)
+        pdf.cell(50, 10, "Transformation", 1)
+        pdf.ln()
+        pdf.set_font("Arial", "", 12)
+        for col, config in mapping.get("mappings", {}).items():
+            pdf.cell(40, 10, col, 1)
+            pdf.cell(60, 10, ", ".join(config.get("destinations", [])), 1)
+            pdf.cell(40, 10, config.get("function", ""), 1)
+            pdf.cell(50, 10, str(config.get("transformation", "")), 1)
+            pdf.ln()
+    else:
+        pdf.cell(0, 10, "No mapping defined.", ln=True, align="L")
+    
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Matching Results", ln=True, align="L")
+    pdf.set_font("Arial", "", 12)
+    if matching_results is not None:
+        pdf.cell(0, 10, f"Matched Records: {len(matching_results)}", ln=True, align="L")
+        # Add a sample of matching results
+        for index, row in matching_results.head(10).iterrows():
+            pdf.cell(0, 10, str(row.to_dict()), ln=True, align="L")
+            pdf.ln(5)
+    else:
+        pdf.cell(0, 10, "No matching results available.", ln=True, align="L")
+    
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Validation Configuration", ln=True, align="L")
+    pdf.set_font("Arial", "", 12)
+    if validation_config:
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(40, 10, "Column", 1)
+        pdf.cell(60, 10, "Rule", 1)
+        pdf.cell(90, 10, "Value", 1)
+        pdf.ln()
+        pdf.set_font("Arial", "", 12)
+        for col, rules in validation_config.items():
+            for rule, value in rules.items():
+                pdf.cell(40, 10, col, 1)
+                pdf.cell(60, 10, rule, 1)
+                pdf.cell(90, 10, str(value), 1)
+                pdf.ln()
+    else:
+        pdf.cell(0, 10, "No validation configuration defined.", ln=True, align="L")
+    
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Validation Results Summary", ln=True, align="L")
+    pdf.set_font("Arial", "", 12)
+    if validation_results:
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(40, 10, "Column", 1)
+        pdf.cell(60, 10, "Rule", 1)
+        pdf.cell(40, 10, "Pass", 1)
+        pdf.cell(40, 10, "Fail", 1)
+        pdf.ln()
+        pdf.set_font("Arial", "", 12)
+        for result in validation_results:
+            pdf.cell(40, 10, result[Column.NAME.value], 1)
+            pdf.cell(60, 10, result["Rule"], 1)
+            pdf.cell(40, 10, str(result["Pass"]), 1)
+            pdf.cell(40, 10, str(result["Fail"]), 1)
+            pdf.ln()
+    else:
+        pdf.cell(0, 10, "No validation results available.", ln=True, align="L")
+    
+    return pdf.output(dest="S").encode("latin1")
 
 def display_metadata(df: pd.DataFrame, title: str):
     st.markdown(f'<h3 class="step-header">{title}</h3>', unsafe_allow_html=True)
