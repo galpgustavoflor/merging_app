@@ -58,6 +58,28 @@ class FileLoader:
             logger.error(f"Error processing dataframe: {str(e)}", exc_info=True)
             raise
 
+def clean_dataframe_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean and convert DataFrame types for Arrow compatibility."""
+    df = df.copy()
+    
+    for col in df.columns:
+        # Detect Pandas nullable integer column ("Int64") and convert using a lambda to native int
+        if hasattr(df[col].dtype, 'name') and df[col].dtype.name == 'Int64':
+            df[col] = df[col].apply(lambda x: int(x) if pd.notna(x) else None)
+        # Handle other integer dtypes similarly
+        elif pd.api.types.is_integer_dtype(df[col]):
+            df[col] = df[col].apply(lambda x: int(x) if pd.notna(x) else None)
+        # Convert object columns to strings
+        elif df[col].dtype == 'object':
+            df[col] = df[col].astype(str)
+        else:
+            try:
+                pd.api.types.infer_dtype(df[col])
+            except Exception:
+                df[col] = df[col].astype(str)
+    
+    return df
+
 class ConfigLoader:
     @staticmethod
     def load_json_config(file_content: str) -> Dict:
@@ -99,7 +121,7 @@ class DataValidator:
             if col not in df.columns:
                 continue
             # Null check
-            if rules.get(VRule.VALIDATE_NULLS.value, False):
+            if rules.get(VRule.VALIDATE_NULLs.value, False):
                 null_count = df[col].isnull().sum()
                 results.append({
                     Column.NAME.value: col,

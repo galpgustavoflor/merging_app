@@ -35,7 +35,7 @@ pip install -r requirements.txt
 
 1. Start the application:
 ```bash
-streamlit run app.py
+streamlit run app.py --server.maxUploadSize=500
 ```
 
 2. Follow the step-by-step process in the UI:
@@ -87,5 +87,3 @@ Create a JSON file with validation rules:
 5. Create a Pull Request
 
 ## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.

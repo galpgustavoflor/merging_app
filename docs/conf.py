@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.abspath('..'))
 
 project = 'Dataset Comparison Tool'
-copyright = '2023'
+copyright = '2025'
 author = 'Galp'
 
 extensions = [
