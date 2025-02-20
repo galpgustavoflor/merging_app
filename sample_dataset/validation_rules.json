@@ -1,0 +1,1 @@
+{"ID_Destino":{"validate_nulls":true},"Nome_Destino":{"validate_uniqueness":true},"Idade_Destino":{"validate_range":true,"min_value":30,"max_value":null}}

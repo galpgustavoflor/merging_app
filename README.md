@@ -87,3 +87,29 @@ Create a JSON file with validation rules:
 5. Create a Pull Request
 
 ## License
+
+# Merging App
+
+This project is a Streamlit application for data merging.
+
+## Prerequisites
+
+- Docker
+
+## Build the Docker Image
+
+To build the Docker image, run the following command:
+
+```sh
+docker build -t merging_app .
+```
+
+## Run the Docker Container
+
+To run the Docker container, use the following command:
+
+```sh
+docker run -p 8501:8501 merging_app
+```
+
+This will start the Streamlit application, and it will be accessible at `http://localhost:8501`.

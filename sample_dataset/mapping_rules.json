@@ -1,0 +1,1 @@
+{"key_source":["ID"],"key_target":["ID_Destino"],"mappings":{"Salario":{"destinations":["Salario_Destino"],"function":"Aggregation","transformation":"sum"},"Cidade":{"destinations":["Cidade_Destino"],"function":"Conversion mapping","transformation":"{\"São Paulo\":\"SP\",\n\"Rio de Janeiro\":\"RJ\",\n\"Minas Gerais\":\"MG\"\n}"}}}

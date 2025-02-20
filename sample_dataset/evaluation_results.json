@@ -1,0 +1,26 @@
+{
+  "mapped_columns": {
+    "Salario": "Salario_Destino",
+    "Cidade": "Cidade_Destino"
+  },
+  "key_matches": {
+    "total_source_keys": 7,
+    "total_target_keys": 5,
+    "matched_keys": 4,
+    "match_rate": "57.14%"
+  },
+  "aggregation_accuracy": {
+    "Salario": {
+      "matches": 0,
+      "total": 0,
+      "accuracy": "0%"
+    }
+  },
+  "conversion_accuracy": {
+    "Cidade": {
+      "matches": 0,
+      "total": 0,
+      "accuracy": "0%"
+    }
+  }
+}

@@ -7,7 +7,7 @@ import json
 import streamlit as st
 from pathlib import Path
 from constants import ValidationRule as VRule, FILE_TYPES, Column, Functions
-from config import LOGGING_CONFIG, DASK_CONFIG
+from config import LOGGING_CONFIG, DASK_CONFIG, STREAMLIT_CONFIG
 import numpy as np
 
 logging.config.dictConfig(LOGGING_CONFIG)
@@ -15,10 +15,23 @@ logger = logging.getLogger(__name__)
 
 class FileLoader:
     @staticmethod
-    @st.cache_data
+    @st.cache_data(ttl=3600)  # Add cache TTL
     def load_file(uploaded_file) -> Optional[pd.DataFrame]:
         try:
+            # Add file size check
+            max_size = STREAMLIT_CONFIG["max_file_size"] * 1024 * 1024  # Convert MB to bytes
+            if uploaded_file.size > max_size:
+                raise ValueError(f"File size exceeds maximum limit of {STREAMLIT_CONFIG['max_file_size']}MB")
+
             file_path = Path(uploaded_file.name)
+            if file_path.suffix not in ['.xlsx', '.csv']:
+                raise ValueError("Unsupported file format. Only .xlsx and .csv files are supported.")
+
+            # Add content type validation
+            content_type = uploaded_file.type
+            if content_type not in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv']:
+                raise ValueError("Invalid file content type")
+
             if file_path.suffix == '.xlsx':
                 df = pd.read_excel(uploaded_file, engine='openpyxl')
             elif file_path.suffix == '.csv':
@@ -39,9 +52,12 @@ class FileLoader:
                 raise ValueError("Unsupported file format")
             return FileLoader._process_dataframe(df)
         except Exception as e:
-            logger.error(f"Error loading file: {str(e)}", exc_info=True)
-            st.error(f"Error loading file: {str(e)}")
-            return None
+            logger.error("Error loading file", exc_info=True, extra={
+                'filename': uploaded_file.name,
+                'file_size': uploaded_file.size,
+                'content_type': uploaded_file.type
+            })
+            raise RuntimeError(f"Failed to load file: {str(e)}") from e
 
     @staticmethod
     def _process_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -189,18 +205,135 @@ class DataValidator:
                     st.warning(f"Range validation failed for column {col}: {str(e)}")
         return results
 
+def apply_rules(df: pd.DataFrame, mapping_config: dict) -> pd.DataFrame:
+    """Apply transformation rules to the dataframe."""
+    df = df.copy()
+    key_source = mapping_config.get('key_source', [])
+    
+    # Collect all aggregations to perform them together
+    agg_cols = {}
+    
+    # First handle conversions and prepare aggregations
+    for col, rules in mapping_config.get('mappings', {}).items():
+        if rules["function"] == Functions.CONVERSION.value:
+            if rules.get("transformation"):
+                mapping_dict = json.loads(rules["transformation"])
+                df[col] = df[col].astype(str).map(mapping_dict)
+                # After conversion, include in aggregation as 'first' to keep the mapped value
+                agg_cols[col] = 'first'
+        elif rules["function"] == Functions.DIRECT.value:
+            # For direct mappings, include in aggregation as 'first'
+            agg_cols[col] = 'first'
+        elif rules["function"] == Functions.AGGREGATION.value:
+            # Collect aggregation rules with specified function
+            agg_cols[col] = rules["transformation"]
+    
+    # If there are any columns to aggregate
+    if agg_cols:
+        try:
+            # Keep only necessary columns (keys + columns to aggregate)
+            columns_to_keep = key_source + list(agg_cols.keys())
+            df = df[columns_to_keep].copy()
+            
+            # Perform all aggregations at once
+            df = df.groupby(key_source, as_index=False).agg(agg_cols)
+            
+            logger.info(f"Aggregated columns: {list(agg_cols.keys())}")
+            logger.info(f"Final columns: {df.columns.tolist()}")
+        except Exception as e:
+            logger.error(f"Error during aggregation: {str(e)}")
+            raise
+    
+    return df
+
+def normalize_keys(df: pd.DataFrame, key_columns: List[str]) -> pd.DataFrame:
+    """Normalize key columns for consistent matching."""
+    df = df.copy()
+    for col in key_columns:
+        if col in df.columns:
+            # Convert to string and strip whitespace
+            df[col] = df[col].astype(str).str.strip()
+            # Remove special characters and normalize case
+            df[col] = df[col].str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
+            df[col] = df[col].str.lower()
+    return df
+
+def preprocess_dataframe(df: pd.DataFrame, key_columns: List[str]) -> pd.DataFrame:
+    """Preprocess DataFrame for matching."""
+    df = df.copy()
+    # Remove completely empty rows
+    df = df.dropna(how='all')
+    # Fill NA in key columns with a special marker
+    df[key_columns] = df[key_columns].fillna('__NA__')
+    return df
+
+def validate_merge_keys(df: pd.DataFrame, key_columns: List[str]) -> bool:
+    """Validate if merge keys are unique."""
+    if not key_columns:
+        return False
+    return df.groupby(key_columns).size().max() == 1
+
 @st.cache_data
-def execute_matching_dask(df_source: pd.DataFrame, df_target: pd.DataFrame, key_source: List[str], key_target: List[str]) -> Tuple[dd.DataFrame, Dict[str, int]]:
-    npartitions = DASK_CONFIG["default_npartitions"]
-    ddf_source = dd.from_pandas(df_source, npartitions=npartitions)
-    ddf_target = dd.from_pandas(df_target, npartitions=npartitions)
-    ddf_merged = ddf_source.merge(ddf_target, left_on=key_source, right_on=key_target, how="outer", indicator=True)
-    stats = {
-        "total_match": int(ddf_merged[ddf_merged['_merge'] == 'both'].shape[0].compute()),
-        "missing_source": int(ddf_merged[ddf_merged['_merge'] == 'right_only'].shape[0].compute()),
-        "missing_target": int(ddf_merged[ddf_merged['_merge'] == 'left_only'].shape[0].compute())
-    }
-    return ddf_merged, stats
+def execute_matching_dask(df_source: pd.DataFrame, df_target: pd.DataFrame, mapping_config: dict) -> Tuple[dd.DataFrame, dict]:
+    """Execute the matching process using Dask."""
+    try:
+        # Get keys from mapping config
+        key_source = mapping_config.get('key_source', [])
+        key_target = mapping_config.get('key_target', [])
+        
+        if not key_source or not key_target:
+            raise ValueError("Source and target keys must be defined")
+        
+        # Get mapped columns
+        mapped_columns = {}
+        for col, rules in mapping_config.get('mappings', {}).items():
+            if rules.get('destinations'):
+                # Map source column to its target destination(s)
+                for dest in rules['destinations']:
+                    mapped_columns[col] = dest
+        
+        # Combine keys and mapped columns for merging
+        merge_on_source = key_source + list(mapped_columns.keys())
+        merge_on_target = key_target + list(mapped_columns.values())
+        
+        # Convert nullable types in key columns
+        def convert_nullable_types(df):
+            for col in df.columns:
+                if str(df[col].dtype).startswith('Int'):
+                    df[col] = df[col].astype('float').astype('Int64').fillna(-999999).astype('int64')
+            return df
+        
+        df_source = convert_nullable_types(df_source.copy())
+        df_target = convert_nullable_types(df_target.copy())
+        
+        # Apply mapping rules
+        df_source = apply_rules(df_source, mapping_config)
+        
+        # Convert to Dask DataFrames
+        ddf_source = dd.from_pandas(df_source, npartitions=DASK_CONFIG["npartitions"])
+        ddf_target = dd.from_pandas(df_target, npartitions=DASK_CONFIG["npartitions"])
+        
+        # Perform merge with all matching columns
+        ddf_merged = ddf_source.merge(
+            ddf_target,
+            left_on=merge_on_source,
+            right_on=merge_on_target,
+            how='outer',
+            indicator=True
+        )
+        
+        # Compute statistics
+        stats = {
+            'total_match': len(ddf_merged[ddf_merged['_merge'] == 'both'].compute()),
+            'missing_source': len(ddf_merged[ddf_merged['_merge'] == 'right_only'].compute()),
+            'missing_target': len(ddf_merged[ddf_merged['_merge'] == 'left_only'].compute())
+        }
+        
+        return ddf_merged, stats
+        
+    except Exception as e:
+        logger.error(f"Error in execute_matching_dask: {e}", exc_info=True)
+        raise
 
 def handle_large_file(file_path: str, chunk_size: int = 10000) -> pd.DataFrame:
     chunks = []

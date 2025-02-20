@@ -27,11 +27,11 @@ def render_breadcrumbs():
         cols = st.columns(len(STEP_LABELS))
         for i, (step, label) in enumerate(STEP_LABELS.items()):
             with cols[i]:
-                if step < st.session_state.step:
+                if step.value < st.session_state.step:
                     if st.button(f"✔ {label}", key=f"bread_{step}", help="Go to this step"):
-                        st.session_state.step = step
+                        st.session_state.step = step.value
                         st.rerun()  # updated rerun call
-                elif step == st.session_state.step:
+                elif step.value == st.session_state.step:
                     st.markdown(f'<div class="breadcrumb-active" style="color: #FF6600; font-weight: bold;">● {label}</div>', unsafe_allow_html=True)
                 else:
                     st.markdown(f'<div class="breadcrumb-pending" style="color: #B0BEC5;">○ {label}</div>', unsafe_allow_html=True)
@@ -40,7 +40,7 @@ def render_breadcrumbs():
 def step_navigation(back=True, next=True, next_label="Next Step"):
     """Render navigation buttons."""
     cols = st.columns(2)
-    if back and st.session_state.step > Step.SOURCE_UPLOAD:
+    if back and st.session_state.step > Step.SOURCE_UPLOAD.value:
         if cols[0].button("← Back", key="back_button", help="Go to previous step", use_container_width=True):
             st.session_state.step -= 1
             st.rerun()  # updated rerun call
@@ -58,6 +58,22 @@ def main():
         page_icon="🍊"  # Updated to reflect the orange branding
     )
     
+    # Initialize session state variables
+    if 'step' not in st.session_state:
+        st.session_state.step = Step.SOURCE_UPLOAD.value
+    if 'df_source' not in st.session_state:
+        st.session_state.df_source = None
+    if 'df_target' not in st.session_state:
+        st.session_state.df_target = None
+    if 'mapping' not in st.session_state:
+        st.session_state.mapping = {}
+    if 'validation_rules' not in st.session_state:
+        st.session_state.validation_rules = {}
+    if 'matching_results' not in st.session_state:
+        st.session_state.matching_results = None
+    if 'validation_results' not in st.session_state:
+        st.session_state.validation_results = None
+
     inject_custom_css()
     
     with st.container():
@@ -68,9 +84,6 @@ def main():
             '</h1>',
             unsafe_allow_html=True
         )
-    
-    # Initialize session state variables
-    SessionState.initialize()
     
     render_breadcrumbs()
     
@@ -87,7 +100,7 @@ def main():
             Step.REPORT_SUMMARY: handle_report_summary  # Added new final step
         }
         
-        current_handler = step_handlers.get(st.session_state.step)
+        current_handler = step_handlers.get(Step(st.session_state.step))
         if current_handler:
             current_handler()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -117,101 +130,265 @@ def handle_target_file_upload():
 def handle_mapping_rules():
     st.header("Step 3: Define Mapping Rules and Keys")
     
-    if not all(key in st.session_state for key in ['df_source', 'df_target']):
-        st.error("Please complete the previous steps first.")
-        step_navigation(next=False)
-        return
+    # Initialize mapping in session state if not exists
+    if "mapping" not in st.session_state:
+        st.session_state.mapping = {"mappings": {}, "key_source": [], "key_target": []}
     
+    # Handle JSON upload with safe state management
     with st.expander("Upload JSON File for Mapping"):
-        uploaded_json = st.file_uploader("Load Mapping Rules from JSON", type=["json"], key="mapping_json")
-        if uploaded_json:
-            ConfigLoader.load_mapping_from_json(uploaded_json)
+        uploaded_json = st.file_uploader(
+            "Load Mapping Rules from JSON", 
+            type=["json"], 
+            key="mapping_json",
+            help="Upload a JSON file containing mapping rules"
+        )
+        
+        # Store the file upload state
+        if "previous_upload" not in st.session_state:
+            st.session_state.previous_upload = None
+            
+        # Only process if there's a new file and it's different from the previous one
+        if uploaded_json and uploaded_json != st.session_state.previous_upload:
+            try:
+                mapping_data = json.load(uploaded_json)
+                # Validate the mapping structure before updating
+                if isinstance(mapping_data, dict) and "mappings" in mapping_data:
+                    st.session_state.mapping = mapping_data
+                    st.session_state.previous_upload = uploaded_json
+                    st.success("Mapping rules loaded successfully!")
+                else:
+                    st.error("Invalid mapping file structure")
+            except Exception as e:
+                st.error(f"Error loading mapping file: {str(e)}")
     
+    # Validate required data
     df_source = st.session_state.get("df_source")
     df_target = st.session_state.get("df_target")
     if df_source is None or df_target is None:
         st.error("Please upload both source and target files.")
         return
     
-    key_source = st.multiselect("Select the key(s) in the source", df_source.columns.tolist(), default=st.session_state.mapping.get("key_source", []))
-    key_target = st.multiselect("Select the key(s) in the target", df_target.columns.tolist(), default=st.session_state.mapping.get("key_target", []))
+    # Create a working copy of mapping config
+    mapping_config = st.session_state.mapping.copy()
     
-    st.session_state.key_source = key_source
-    st.session_state.key_target = key_target
+    # Key selection with defaults from current mapping
+    col1, col2 = st.columns(2)
+    with col1:
+        key_source = st.multiselect(
+            "Select source key(s)", 
+            df_source.columns.tolist(),
+            default=mapping_config.get("key_source", []),
+            key="key_source_select"
+        )
+    with col2:
+        key_target = st.multiselect(
+            "Select target key(s)",
+            df_target.columns.tolist(),
+            default=mapping_config.get("key_target", []),
+            key="key_target_select"
+        )
     
-    mapping_config = st.session_state.get("mapping", {})
-    for col in df_source.columns:
-        if col not in key_source:
-            with st.expander(f"Configure mapping for '{col}'"):
-                option = st.radio(f"Action for column '{col}'", ["Ignore", "Map"], key=f"option_{col}", index=1 if col in mapping_config.get("mappings", {}) else 0)
-                if option == "Map":
-                    mapped_cols = st.multiselect(f"Map '{col}' to:", df_target.columns.tolist(), key=f"map_{col}", default=mapping_config.get("mappings", {}).get(col, {}).get("destinations", []))
-                    function = st.selectbox(f"Mapping Type for '{col}'", [f.value for f in Functions], key=f"func_{col}", index=0)
-                    transformation = None
-                    if function == Functions.AGGREGATION.value:
-                        transformation = st.selectbox("Aggregation Type", ["Sum", "Mean", "Median", "Max", "Min"], key=f"agg_{col}")
-                    elif function == Functions.CONVERSION.value:
-                        transformation = st.text_area("Define Conversion Dictionary (JSON)", "{}", key=f"conv_{col}")
-                        try:
-                            json.loads(transformation)
-                        except json.JSONDecodeError:
-                            st.error("Invalid JSON format for conversion dictionary.")
-                    mapping_config.setdefault("mappings", {})[col] = {
-                        "destinations": mapped_cols,
-                        "function": function,
-                        "transformation": transformation
-                    }
+    # Update keys in mapping config
     mapping_config["key_source"] = key_source
     mapping_config["key_target"] = key_target
+    
+    # Column mapping configuration
+    st.subheader("Column Mappings")
+    mapped_columns = set()  # Track mapped columns
+    
+    for col in df_source.columns:
+        if col not in key_source:  # Skip key columns
+            with st.expander(f"Configure mapping for '{col}'", expanded=col in mapping_config.get("mappings", {})):
+                col_config = mapping_config.get("mappings", {}).get(col, {})
+                
+                # Map column or ignore
+                map_col = st.checkbox(
+                    f"Map column '{col}'",
+                    value=col in mapping_config.get("mappings", {}),
+                    key=f"map_checkbox_{col}"
+                )
+                
+                if map_col:
+                    # Destination column selection
+                    mapped_cols = st.multiselect(
+                        f"Map '{col}' to:",
+                        df_target.columns.tolist(),
+                        default=col_config.get("destinations", []),
+                        key=f"dest_select_{col}"
+                    )
+                    
+                    # Mapping function selection
+                    function = st.selectbox(
+                        "Mapping Type",
+                        [f.value for f in Functions],
+                        index=[f.value for f in Functions].index(col_config.get("function", Functions.DIRECT.value)),
+                        key=f"function_select_{col}"
+                    )
+                    
+                    # Handle transformation based on function
+                    transformation = None
+                    if function == Functions.CONVERSION.value:
+                        # Create two columns for the conversion mapping interface
+                        conv_col1, conv_col2 = st.columns([2, 3])
+                        
+                        with conv_col1:
+                            # JSON input
+                            transformation = st.text_area(
+                                "Conversion Dictionary (JSON)",
+                                value=col_config.get("transformation", "{}"),
+                                key=f"transform_input_{col}",
+                                height=200
+                            )
+                            
+                            # Add help text
+                            st.info("Example: {'source_value': 'target_value'}")
+                            
+                            try:
+                                # Validate and parse JSON
+                                transformation_dict = json.loads(transformation or "{}")
+                                if not isinstance(transformation_dict, dict):
+                                    st.error("Transformation must be a valid dictionary")
+                                    transformation = "{}"
+                            except json.JSONDecodeError:
+                                st.error("Invalid JSON format")
+                                transformation = "{}"
+                        
+                        with conv_col2:
+                            # Visual mapping table
+                            st.write("Visual Mapping Table")
+                            
+                            # Get unique values from source column
+                            unique_values = df_source[col].unique()
+                            
+                            # Create mapping table
+                            mapping_data = []
+                            try:
+                                current_mappings = json.loads(transformation or "{}")
+                                for val in unique_values:
+                                    mapping_data.append({
+                                        "Source Value": str(val),
+                                        "Target Value": current_mappings.get(str(val), ""),
+                                        "Sample Count": int(df_source[col].eq(val).sum())
+                                    })
+                                
+                                # Display as DataFrame with edit functionality
+                                mapping_df = pd.DataFrame(mapping_data)
+                                edited_df = st.data_editor(
+                                    mapping_df,
+                                    key=f"mapping_table_{col}",
+                                    hide_index=True,
+                                    use_container_width=True,
+                                    num_rows="fixed"
+                                )
+                                
+                                # Update JSON when table is edited
+                                if not edited_df.equals(mapping_df):
+                                    new_mapping = {
+                                        str(row["Source Value"]): str(row["Target Value"])
+                                        for _, row in edited_df.iterrows()
+                                        if row["Target Value"]  # Only include non-empty mappings
+                                    }
+                                    transformation = json.dumps(new_mapping, indent=2)
+                            except Exception as e:
+                                st.error(f"Error creating mapping table: {str(e)}")
+                            
+                            # Add statistics
+                            st.write("Value Distribution")
+                            value_counts = df_source[col].value_counts().head(10)
+                            st.bar_chart(value_counts)
+                    
+                    elif function == Functions.AGGREGATION.value:
+                        transformation = st.selectbox(
+                            "Aggregation Function",
+                            ["sum", "mean", "median", "max", "min"],
+                            index=0,
+                            key=f"agg_select_{col}"
+                        )
+                    
+                    # Update mapping configuration
+                    if mapped_cols:
+                        mapping_config.setdefault("mappings", {})[col] = {
+                            "destinations": mapped_cols,
+                            "function": function,
+                            "transformation": transformation
+                        }
+                        mapped_columns.add(col)
+                
+                # Remove unmapped column
+                elif col in mapping_config.get("mappings", {}):
+                    del mapping_config["mappings"][col]
+    
+    # Clean up any orphaned mappings
+    if "mappings" in mapping_config:
+        orphaned = set(mapping_config["mappings"].keys()) - mapped_columns
+        for col in orphaned:
+            del mapping_config["mappings"][col]
+    
+    # Update session state
     st.session_state.mapping = mapping_config
     
-    if st.checkbox("Show Mapping Configuration (JSON)"):
-        st.json(st.session_state.mapping)
+    # Display current mapping configuration
+    if st.checkbox("Show Mapping Configuration", key="show_mapping"):
+        st.json(mapping_config)
     
-    step_navigation()
+    # Navigation
+    if key_source and key_target and mapping_config.get("mappings"):
+        step_navigation()
+    else:
+        st.warning("Please configure at least one mapping and select keys before proceeding.")
+        step_navigation(next=False)
 
 def handle_matching_execution():
     st.header("Step 4: Execute Matching")
     
-    if not st.session_state.get("mapping"):
+    # Get mapping configuration
+    mapping_config = st.session_state.get("mapping")
+    if not mapping_config:
         st.error("Please define mapping rules first.")
         step_navigation(next=False)
         return
     
-    key_source = st.session_state.get("key_source")
-    key_target = st.session_state.get("key_target")
+    # Get data from session state
     df_source = st.session_state.get("df_source")
     df_target = st.session_state.get("df_target")
     
-    if not key_source or not key_target:
-        st.error("Please select valid keys for matching.")
+    if df_source is None or df_target is None:
+        st.error("Please upload both source and target files.")
         return
     
-    ddf_merged, stats = execute_matching_dask(df_source, df_target, key_source, key_target)
+    try:
+        # Execute matching with mapping config
+        ddf_merged, stats = execute_matching_dask(df_source, df_target, mapping_config)
+        
+        st.subheader("Matching Summary")
+        st.write(f"Total matched records: {stats['total_match']}")
+        st.write(f"Missing in source: {stats['missing_source']}")
+        st.write(f"Missing in target: {stats['missing_target']}")
+        
+        matched_df = ddf_merged[ddf_merged['_merge'] == 'both'].compute()
+        st.session_state.matching_results = matched_df
+        
+        sample_size = min(DASK_CONFIG["sample_size"], len(ddf_merged))
+        sample_df = ddf_merged.compute().sample(n=sample_size, random_state=42)
+        
+        st.subheader("Matching Records (Sample)")
+        st.dataframe(sample_df[sample_df['_merge'] == 'both'])
+        
+        st.subheader("Non-Matching Records (Sample)")
+        non_matching = sample_df[sample_df['_merge'] != 'both']
+        st.dataframe(non_matching)
+        
+        if st.button("Download Full Non-Matching Records"):
+            full_non_matching = ddf_merged[ddf_merged['_merge'] != 'both'].compute()
+            csv = full_non_matching.to_csv(index=False)
+            st.download_button("Download CSV", data=csv, file_name="non_matching_records.csv", mime="text/csv")
     
-    st.subheader("Matching Summary")
-    st.write(f"Total matched records: {stats['total_match']}")
-    st.write(f"Missing in source: {stats['missing_source']}")
-    st.write(f"Missing in target: {stats['missing_target']}")
-    
-    matched_df = ddf_merged[ddf_merged['_merge'] == 'both'].compute()
-    st.session_state.matching_results = matched_df
-    
-    sample_size = min(DASK_CONFIG["sample_size"], len(ddf_merged))
-    sample_df = ddf_merged.compute().sample(n=sample_size, random_state=42)
-    
-    st.subheader("Matching Records (Sample)")
-    st.dataframe(sample_df[sample_df['_merge'] == 'both'])
-    
-    st.subheader("Non-Matching Records (Sample)")
-    non_matching = sample_df[sample_df['_merge'] != 'both']
-    st.dataframe(non_matching)
-    
-    if st.button("Download Full Non-Matching Records"):
-        full_non_matching = ddf_merged[ddf_merged['_merge'] != 'both'].compute()
-        csv = full_non_matching.to_csv(index=False)
-        st.download_button("Download CSV", data=csv, file_name="non_matching_records.csv", mime="text/csv")
-    
+    except Exception as e:
+        st.error(f"Error during matching execution: {str(e)}")
+        logger.error(f"Matching execution error: {e}", exc_info=True)
+        step_navigation(next=False)
+        return
+        
     step_navigation(next_label="Configure Validations")
 
 def handle_validation_rules():
