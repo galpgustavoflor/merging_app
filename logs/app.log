@@ -1,0 +1,296 @@
+2025-02-19 13:52:00,211 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:52:28,205 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:52:28,212 [ERROR] core.file_processor: Error loading file: An error occurred while calling the read_csv method registered to the pandas backend.
+Original Message: An error occurred while calling the read_csv method registered to the pandas backend.
+Original Message: 'UploadedFile' object has no attribute 'startswith'
+2025-02-19 13:54:23,270 [INFO] visions.backends: Pandas backend loaded 2.2.3
+2025-02-19 13:54:23,275 [INFO] visions.backends: Numpy backend loaded 2.1.3
+2025-02-19 13:54:23,295 [INFO] visions.backends: Pyspark backend loaded 3.5.4
+2025-02-19 13:54:23,296 [INFO] visions.backends: Python backend loaded
+2025-02-19 13:54:25,489 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:54:25,493 [ERROR] core.file_processor: Error loading file: An error occurred while calling the read_csv method registered to the pandas backend.
+Original Message: An error occurred while calling the read_csv method registered to the pandas backend.
+Original Message: 'UploadedFile' object has no attribute 'startswith'
+2025-02-19 13:54:30,697 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:54:35,913 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:54:35,928 [ERROR] core.file_processor: Error loading file: An error occurred while calling the read_csv method registered to the pandas backend.
+Original Message: An error occurred while calling the read_csv method registered to the pandas backend.
+Original Message: 'UploadedFile' object has no attribute 'startswith'
+2025-02-19 13:56:15,110 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:56:15,142 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 13:56:15,377 [ERROR] core.file_processor: Error getting summary: 'DataFrame' object has no attribute 'compute'
+2025-02-19 13:56:23,964 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:56:23,964 [ERROR] core.file_processor: Error loading file: 'NoneType' object has no attribute 'getvalue'
+2025-02-19 13:56:26,052 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:56:26,060 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 13:56:26,070 [ERROR] core.file_processor: Error getting summary: 'DataFrame' object has no attribute 'compute'
+2025-02-19 13:56:27,112 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:56:27,112 [ERROR] core.file_processor: Error loading file: 'NoneType' object has no attribute 'getvalue'
+2025-02-19 13:56:31,023 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:56:31,981 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:56:31,981 [ERROR] core.file_processor: Error loading file: 'NoneType' object has no attribute 'getvalue'
+2025-02-19 13:56:33,031 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:56:36,293 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:56:36,293 [ERROR] core.file_processor: Error loading file: 'NoneType' object has no attribute 'getvalue'
+2025-02-19 13:56:37,128 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:58:30,668 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:58:32,550 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:58:34,496 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:58:34,992 [ERROR] core.file_processor: DataHub loading error: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+2025-02-19 13:58:37,347 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:58:40,706 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:58:45,728 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:58:46,848 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:58:59,914 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:59:05,027 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 13:59:05,033 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 13:59:05,051 [ERROR] core.file_processor: Error getting summary: 'DataFrame' object has no attribute 'compute'
+2025-02-19 14:00:21,129 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:00:21,136 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:00:21,182 [ERROR] core.data_validator: Validation error: 'Series' object has no attribute 'compute'
+2025-02-19 14:00:21,187 [ERROR] __main__: Error processing data: 'null_checks'
+2025-02-19 14:03:33,879 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:03:33,886 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:03:34,800 [ERROR] __main__: Error processing data: Styler.highlight_null() got an unexpected keyword argument 'null_color'
+2025-02-19 14:03:58,225 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:04:06,777 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:04:06,782 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:04:06,844 [ERROR] __main__: Error processing data: Styler.highlight_null() got an unexpected keyword argument 'null_color'
+2025-02-19 14:07:06,882 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:07:06,886 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:07:06,952 [ERROR] core.data_validator: Validation error: 'Series' object has no attribute 'compute'
+2025-02-19 14:07:06,955 [ERROR] __main__: Error processing data: 'null_checks'
+2025-02-19 14:08:15,782 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:08:15,798 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:08:29,554 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:08:29,555 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:08:43,573 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:08:43,579 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:08:44,829 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:08:44,836 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:09:00,455 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:09:00,462 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:09:00,580 [ERROR] core.file_processor: Error generating profile: 'DataFrame' object has no attribute 'compute'
+2025-02-19 14:09:00,582 [ERROR] __main__: Error processing data: 'DataFrame' object has no attribute 'compute'
+2025-02-19 14:10:02,557 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:10:02,563 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:10:06,336 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:10:06,346 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:10:07,496 [INFO] core.file_processor: Successfully generated profile report
+2025-02-19 14:10:29,733 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:10:29,745 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:10:30,563 [INFO] core.file_processor: Successfully generated profile report
+2025-02-19 14:10:31,337 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:10:31,350 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:10:32,148 [INFO] core.file_processor: Successfully generated profile report
+2025-02-19 14:11:34,559 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:11:34,567 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:11:51,437 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:11:51,450 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:12:15,252 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:12:18,334 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:12:18,346 [INFO] core.file_processor: Successfully loaded file: exemplo_origem.csv
+2025-02-19 14:12:54,087 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:12:55,134 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:12:55,632 [ERROR] core.file_processor: DataHub loading error: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+2025-02-19 14:13:01,099 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:13:14,545 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:13:14,983 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-19 14:15:37,872 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:15:38,458 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-19 14:15:47,343 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:15:47,805 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-19 14:17:01,611 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:17:02,315 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-19 14:34:54,694 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:34:55,001 [INFO] core.file_processor: Successfully loaded file: rfn_account_202502141513.csv
+2025-02-19 14:34:55,008 [ERROR] core.file_processor: Error getting summary: No objects to concatenate
+2025-02-19 14:34:55,009 [ERROR] __main__: Error processing data: No objects to concatenate
+2025-02-19 14:34:59,683 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:35:03,894 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:35:04,154 [INFO] core.file_processor: Successfully loaded file: rfn_account_202502141513.csv
+2025-02-19 14:35:04,167 [ERROR] core.file_processor: Error getting summary: No objects to concatenate
+2025-02-19 14:35:04,170 [ERROR] __main__: Error processing data: No objects to concatenate
+2025-02-19 14:36:15,288 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:36:17,317 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:42:36,100 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:42:41,465 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:42:41,971 [INFO] core.file_processor: Successfully loaded file: rfn_account_202502141513.csv
+2025-02-19 14:42:41,979 [ERROR] core.file_processor: Error getting summary: Cannot describe a DataFrame without columns
+2025-02-19 14:42:41,985 [ERROR] __main__: Error processing data: Cannot describe a DataFrame without columns
+2025-02-19 14:42:57,804 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:42:58,368 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-19 14:43:49,741 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:43:55,511 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:43:56,154 [INFO] core.file_processor: Successfully loaded file: rfn_account_202502141513.csv
+2025-02-19 14:43:56,167 [ERROR] core.file_processor: Error getting summary: Cannot describe a DataFrame without columns
+2025-02-19 14:43:56,169 [ERROR] __main__: Error processing data: Cannot describe a DataFrame without columns
+2025-02-19 14:45:33,479 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:45:34,311 [INFO] core.file_processor: Successfully loaded file: rfn_account_202502141513.csv
+2025-02-19 14:46:02,150 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:46:03,051 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-19 14:47:10,758 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:47:12,475 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-19 14:53:53,755 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:53:54,217 [INFO] core.file_processor: Successfully loaded file: rfn_account_202502141513.csv
+2025-02-19 14:54:27,584 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:57:45,843 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:57:49,565 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:57:51,553 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:58:10,912 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:58:18,241 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:58:18,903 [ERROR] core.file_processor: DataHub loading error: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+2025-02-19 14:58:26,316 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 14:58:27,293 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:02:01,155 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:02:02,811 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:02:07,082 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:02:11,334 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:02:12,225 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:02:33,271 [ERROR] connections.datahub_dask_connector: Failed to connect to DataHub: HTTPSConnectionPool(host='datahub.ulysses.galpenergia.corp', port=443): Max retries exceeded with url: /api/auth/verify (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x000001BE463DAEA0>, 'Connection to datahub.ulysses.galpenergia.corp timed out. (connect timeout=None)'))
+2025-02-19 15:06:42,615 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:06:50,842 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:06:52,993 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:06:55,153 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:06:56,031 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:09:01,900 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:09:04,697 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:09:05,443 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:09:21,068 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:09:23,489 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:09:24,313 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:09:45,368 [ERROR] connections.datahub_dask_connector: Failed to connect to DataHub: HTTPSConnectionPool(host='datahub.ulysses.galpenergia.corp', port=443): Max retries exceeded with url: /api/auth/verify (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x000001BE463D8050>, 'Connection to datahub.ulysses.galpenergia.corp timed out. (connect timeout=None)'))
+2025-02-19 15:09:57,366 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:10:18,393 [ERROR] connections.datahub_dask_connector: Failed to connect to DataHub: HTTPSConnectionPool(host='datahub.ulysses.galpenergia.corp', port=443): Max retries exceeded with url: /api/auth/verify (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x000001BE463DB170>, 'Connection to datahub.ulysses.galpenergia.corp timed out. (connect timeout=None)'))
+2025-02-19 15:13:14,082 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:13:16,799 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:13:21,813 [ERROR] connections.datahub_dask_connector: Connection to DataHub timed out
+2025-02-19 15:13:27,550 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:13:32,573 [ERROR] connections.datahub_dask_connector: Connection to DataHub timed out
+2025-02-19 15:19:28,137 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:19:30,753 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:19:36,146 [ERROR] connections.datahub_dask_connector: Connection to DataHub timed out
+2025-02-19 15:23:17,555 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:23:19,153 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:23:19,157 [ERROR] __main__: DataHub error: DataHubConnector.__init__() missing 2 required positional arguments: 'username' and 'password'
+2025-02-19 15:26:43,740 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:26:45,870 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:26:50,891 [ERROR] connections.datahub_dask_connector: Connection to DataHub timed out
+2025-02-19 15:26:57,886 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:27:02,904 [ERROR] connections.datahub_dask_connector: Connection to DataHub timed out
+2025-02-19 15:32:39,893 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:32:41,960 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:32:41,960 [ERROR] connections.datahub_dask_connector: Failed to connect to DataHub: module 'pyarrow.flight' has no attribute 'connect_to_dremio_flight_server_endpoint'
+2025-02-19 15:36:43,220 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:36:44,944 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:36:45,893 [ERROR] connections.pyarrow_client: Failed to create Flight client: Could not finish writing before closing
+2025-02-19 15:36:45,893 [ERROR] connections.datahub_dask_connector: Failed to connect to DataHub: Could not finish writing before closing
+2025-02-19 15:37:12,812 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:37:16,294 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:37:19,712 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:37:22,443 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:37:23,115 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:37:24,093 [ERROR] connections.pyarrow_client: Failed to create Flight client: Could not finish writing before closing
+2025-02-19 15:37:24,094 [ERROR] connections.datahub_dask_connector: Failed to connect to DataHub: Could not finish writing before closing
+2025-02-19 15:38:52,837 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:38:54,416 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:38:55,861 [ERROR] connections.pyarrow_client: Failed to create Flight client: Could not finish writing before closing
+2025-02-19 15:38:55,861 [ERROR] connections.datahub_dask_connector: Failed to connect to DataHub: Could not finish writing before closing
+2025-02-19 15:42:45,562 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:42:47,232 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:42:48,768 [ERROR] connections.datahub_dask_connector: Failed to connect to DataHub: Could not finish writing before closing
+2025-02-19 15:48:51,198 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:48:55,854 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:48:57,467 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:00,665 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:07,021 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:09,069 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:09,085 [INFO] connections.datahub_dask_connector: Initializing ClientDask for user: 81000270@galp.com
+2025-02-19 15:49:09,510 [INFO] connections.datahub_dask_connector: Host datahub.ulysses.galpenergia.corp:32010 is reachable (took 0.42s)
+2025-02-19 15:49:18,794 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:39,957 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:39,964 [INFO] connections.datahub_dask_connector: Initializing ClientDask for user: 81000270@galp.com
+2025-02-19 15:49:40,231 [INFO] connections.datahub_dask_connector: Host datahub.ulysses.galpenergia.corp:32010 is reachable (took 0.27s)
+2025-02-19 15:49:43,636 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:46,850 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:46,868 [INFO] connections.datahub_dask_connector: Initializing ClientDask for user: 81000270@galp.com
+2025-02-19 15:49:47,131 [INFO] connections.datahub_dask_connector: Host datahub.ulysses.galpenergia.corp:32010 is reachable (took 0.26s)
+2025-02-19 15:49:52,639 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:54,672 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 15:49:54,681 [INFO] connections.datahub_dask_connector: Initializing ClientDask for user: 81000270@galp.com
+2025-02-19 15:49:54,948 [INFO] connections.datahub_dask_connector: Host datahub.ulysses.galpenergia.corp:32010 is reachable (took 0.27s)
+2025-02-19 15:49:57,981 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:22:47,843 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:22:47,854 [INFO] connections.datahub_dask_connector: Initializing ClientDask for user: 81000270@galp.com
+2025-02-19 23:22:48,351 [INFO] connections.datahub_dask_connector: Host datahub.ulysses.galpenergia.corp:32010 is reachable (took 0.50s)
+2025-02-19 23:23:20,917 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:23:29,639 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:23:29,645 [INFO] connections.datahub_dask_connector: Initializing ClientDask for user: 81000270@galp.com
+2025-02-19 23:23:29,905 [INFO] connections.datahub_dask_connector: Host datahub.ulysses.galpenergia.corp:32010 is reachable (took 0.26s)
+2025-02-19 23:23:33,017 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:26:49,402 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:27:55,881 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:27:59,361 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:37:07,021 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:39:49,494 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:39:51,249 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:39:54,371 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:40:09,419 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:40:10,547 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:40:10,547 [INFO] connections.datahub_dask_connector: Initializing ClientDask for user: 81000270@galp.com
+2025-02-19 23:40:10,813 [INFO] connections.datahub_dask_connector: Host datahub.ulysses.galpenergia.corp:32010 is reachable (took 0.27s)
+2025-02-19 23:40:22,341 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:40:29,014 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:48:09,250 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:49:03,037 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:49:50,363 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:50:33,614 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:51:21,976 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:52:43,018 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:52:43,068 [ERROR] __main__: Error processing data: 'str' object has no attribute 'get_summary'
+2025-02-19 23:54:38,913 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:54:38,951 [ERROR] __main__: Error processing data: 'str' object has no attribute 'get_summary'
+2025-02-19 23:55:15,756 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:15,761 [ERROR] __main__: Error processing data: 'NoneType' object has no attribute 'name'
+2025-02-19 23:55:17,161 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:17,211 [ERROR] __main__: Error processing data: 'str' object has no attribute 'get_summary'
+2025-02-19 23:55:30,386 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:30,436 [ERROR] __main__: Error processing data: 'str' object has no attribute 'get_summary'
+2025-02-19 23:55:40,473 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:40,535 [ERROR] __main__: Error processing data: 'str' object has no attribute 'get_summary'
+2025-02-19 23:55:41,984 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:42,050 [ERROR] __main__: Error processing data: 'str' object has no attribute 'get_summary'
+2025-02-19 23:55:44,804 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:44,858 [ERROR] __main__: Error processing data: 'str' object has no attribute 'get_summary'
+2025-02-19 23:55:45,154 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:45,218 [ERROR] __main__: Error processing data: 'str' object has no attribute 'get_summary'
+2025-02-19 23:55:47,553 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:49,531 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:52,564 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:53,875 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:55,159 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:55:55,174 [INFO] connections.datahub_dask_connector: Initializing ClientDask for user: 81000270@galp.com
+2025-02-19 23:55:55,433 [INFO] connections.datahub_dask_connector: Host datahub.ulysses.galpenergia.corp:32010 is reachable (took 0.26s)
+2025-02-19 23:56:04,499 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-19 23:56:04,624 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:05:57,643 [ERROR] __main__: Error processing data: 'DataHubProcessor' object has no attribute 'get_summary'
+2025-02-20 00:08:02,442 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:10:22,736 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:10:23,169 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:10:27,234 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:10:31,797 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:10:32,358 [INFO] core.file_processor: Successfully loaded file: rfn_account_202502141513.csv
+2025-02-20 00:11:10,292 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:11:10,753 [INFO] core.file_processor: Successfully loaded file: rfn_account_202502141513.csv
+2025-02-20 00:11:14,093 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:11:15,011 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-20 00:12:26,100 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:12:27,106 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-20 00:12:36,084 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:12:37,046 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-20 00:12:46,213 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:12:47,149 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-20 00:13:10,659 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:13:11,603 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv
+2025-02-20 00:13:26,649 [INFO] utils.logging_utils: Logging setup completed successfully
+2025-02-20 00:13:27,585 [INFO] core.file_processor: Successfully loaded file: rfn_t_s4_but000_202502141516.csv

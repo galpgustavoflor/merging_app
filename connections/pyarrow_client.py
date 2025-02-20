@@ -1,0 +1,263 @@
+#!/usr/bin/env python
+"""
+  Copyright (C) 2017-2021 Dremio Corporation
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+      http://www.apache.org/licenses/LICENSE-2.0
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+"""
+
+import argparse
+import certifi
+import sys
+from http.cookies import SimpleCookie
+
+from pyarrow import flight
+
+# Dask integration imports
+from dask import delayed
+import dask.dataframe as dd
+
+
+class DremioClientAuthMiddlewareFactory(flight.ClientMiddlewareFactory):
+    """A factory that creates DremioClientAuthMiddleware(s)."""
+
+    def __init__(self):
+        self.call_credential = []
+
+    def start_call(self, info):
+        return DremioClientAuthMiddleware(self)
+
+    def set_call_credential(self, call_credential):
+        self.call_credential = call_credential
+
+
+class DremioClientAuthMiddleware(flight.ClientMiddleware):
+    """
+    A ClientMiddleware that extracts the bearer token from the authorization header
+    returned by the Dremio Flight Server Endpoint.
+    """
+
+    def __init__(self, factory):
+        self.factory = factory
+
+    def received_headers(self, headers):
+        auth_header_key = 'authorization'
+        authorization_header = []
+        for key in headers:
+            if key.lower() == auth_header_key:
+                authorization_header = headers.get(auth_header_key)
+        if not authorization_header:
+            raise Exception('Did not receive authorization header back from server.')
+        self.factory.set_call_credential([
+            b'authorization', authorization_header[0].encode('utf-8')
+        ])
+
+
+class CookieMiddlewareFactory(flight.ClientMiddlewareFactory):
+    """A factory that creates CookieMiddleware(s)."""
+
+    def __init__(self):
+        self.cookies = {}
+
+    def start_call(self, info):
+        return CookieMiddleware(self)
+
+
+class CookieMiddleware(flight.ClientMiddleware):
+    """
+    A ClientMiddleware that receives and retransmits cookies.
+    """
+
+    def __init__(self, factory):
+        self.factory = factory
+
+    def received_headers(self, headers):
+        for key in headers:
+            if key.lower() == 'set-cookie':
+                cookie = SimpleCookie()
+                for item in headers.get(key):
+                    cookie.load(item)
+                self.factory.cookies.update(cookie.items())
+
+    def sending_headers(self):
+        if self.factory.cookies:
+            cookie_string = '; '.join("{!s}={!s}".format(key, val.value)
+                                      for (key, val) in self.factory.cookies.items())
+            return {b'cookie': cookie_string.encode('utf-8')}
+        return {}
+
+
+class KVParser(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, list())
+        for value in values:
+            key, value = value.split('=')
+            getattr(namespace, self.dest).append((key.encode('utf-8'),
+                                                  value.encode('utf-8')))
+
+
+def parse_arguments():
+    """
+    Parses the command-line arguments supplied to the script.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-host', '--hostname', type=str,
+                        help='Dremio co-ordinator hostname. Defaults to "localhost".',
+                        default='localhost')
+    parser.add_argument('-port', '--flightport', dest='port', type=int,
+                        help='Dremio flight server port. Defaults to 32010.',
+                        default=32010)
+    parser.add_argument('-user', '--username', type=str,
+                        help='Dremio username. Defaults to "dremio".',
+                        default="dremio")
+    parser.add_argument('-pass', '--password', type=str,
+                        help='Dremio password. Defaults to "dremio123".',
+                        default="dremio123")
+    parser.add_argument('-pat', '--personalAccessToken', '-authToken', '--authToken',
+                        dest='pat_or_auth_token', type=str,
+                        help="Either a Personal Access Token or an OAuth2 Token.",
+                        required=False)
+    parser.add_argument('-query', '--sqlQuery', dest="query", type=str,
+                        help='SQL query to test',
+                        required=True)
+    parser.add_argument('-tls', '--tls', dest='tls',
+                        help='Enable encrypted connection. Defaults to False.',
+                        default=False, action='store_true')
+    parser.add_argument('-dsv', '--disableServerVerification', dest='disable_server_verification',
+                        type=bool,
+                        help='Disable TLS server verification. Defaults to False.',
+                        default=False)
+    parser.add_argument('-certs', '--trustedCertificates', dest='trusted_certificates',
+                        type=str,
+                        help='Path to trusted certificates for encrypted connection. Defaults to system certificates.',
+                        default=certifi.where())
+    parser.add_argument('-sessionProperties', '--sessionProperties', dest='session_properties',
+                        help=("Key value pairs of SessionProperty, "
+                              "example: -session_properties key1=value1 key2=value2"),
+                        required=False, nargs='*', action=KVParser)
+    parser.add_argument('-engine', '--engine', type=str,
+                        help='The specific engine to run against.',
+                        required=False)
+    return parser.parse_args()
+
+
+def process_chunk(chunk):
+    """
+    Converts a FlightStreamChunk to a Pandas DataFrame.
+    The chunk's data attribute holds the Arrow Table.
+    """
+    return chunk.data.to_pandas()
+
+
+def connect_to_dremio_flight_server_endpoint(host, port, username, password, query,
+                                             tls, certs, disable_server_verification,
+                                             pat_or_auth_token, engine, session_properties):
+    """
+    Connects to the Dremio Flight server endpoint with the provided credentials,
+    runs the SQL query, and returns the results as a Dask DataFrame.
+    This implementation uses Dask's delayed API to process large datasets in partitions.
+    """
+    try:
+        # Default to unencrypted TCP connection.
+        scheme = "grpc+tcp"
+        connection_args = {}
+
+        if tls:
+            scheme = "grpc+tls"
+            if certs:
+                with open(certs, "rb") as root_certs:
+                    connection_args["tls_root_certs"] = root_certs.read()
+            elif disable_server_verification:
+                connection_args['disable_server_verification'] = disable_server_verification
+            else:
+                sys.exit("Trusted certificates must be provided to establish a TLS connection")
+
+        headers = session_properties if session_properties else []
+        if engine:
+            headers.append((b'engine', engine.encode('utf-8')))
+
+        # Example workload management settings.
+        headers.append((b'routing_tag', b'test-routing-tag'))
+        headers.append((b'routing_queue', b'Low Cost User Queries'))
+
+        client_cookie_middleware = CookieMiddlewareFactory()
+
+        if pat_or_auth_token:
+            client = flight.FlightClient(f"{scheme}://{host}:{port}",
+                                         middleware=[client_cookie_middleware],
+                                         **connection_args)
+            headers.append((b'authorization',
+                            f"Bearer {pat_or_auth_token}".encode('utf-8')))
+        elif username and password:
+            client_auth_middleware = DremioClientAuthMiddlewareFactory()
+            client = flight.FlightClient(f"{scheme}://{host}:{port}",
+                                         middleware=[client_auth_middleware, client_cookie_middleware],
+                                         **connection_args)
+            bearer_token = client.authenticate_basic_token(username, password,
+                                                           flight.FlightCallOptions(headers=headers))
+            headers = [bearer_token]
+        else:
+            sys.exit("Username/password or PAT/Auth token must be supplied.")
+
+        if query:
+            # Create FlightDescriptor for the SQL query.
+            flight_desc = flight.FlightDescriptor.for_command(query)
+            options = flight.FlightCallOptions(headers=headers)
+
+            # Optionally retrieve schema (if needed)
+            schema = client.get_schema(flight_desc, options)
+
+            # Retrieve FlightInfo to obtain the ticket for the query result.
+            flight_info = client.get_flight_info(
+                flight.FlightDescriptor.for_command(query), options)
+
+            # Retrieve the result set as a stream of Arrow record batches.
+            reader = client.do_get(flight_info.endpoints[0].ticket, options)
+
+            # Process each FlightStreamChunk as a delayed Pandas DataFrame.
+            delayed_partitions = []
+            for chunk in reader:
+                delayed_partition = delayed(process_chunk)(chunk)
+                delayed_partitions.append(delayed_partition)
+
+            # Provide the meta (i.e. the structure of the DataFrame) explicitly.
+            if delayed_partitions:
+                meta = delayed_partitions[0].compute()  # compute one partition to infer the schema
+                dask_df = dd.from_delayed(delayed_partitions, meta=meta)
+            else:
+                dask_df = None
+
+            return dask_df
+
+    except Exception as exception:
+        print("[ERROR] Exception: {}".format(repr(exception)))
+        raise
+
+
+if __name__ == "__main__":
+    # Parse command-line arguments.
+    args = parse_arguments()
+
+    # Connect to the Dremio Flight server and retrieve results as a Dask DataFrame.
+    dask_dataframe = connect_to_dremio_flight_server_endpoint(
+        args.hostname,
+        args.port,
+        args.username,
+        args.password,
+        args.query,
+        args.tls,
+        args.trusted_certificates,
+        args.disable_server_verification,
+        args.pat_or_auth_token,
+        args.engine,
+        args.session_properties
+    )
+
+    # Example: Compute and print the first few rows.
+    print(dask_dataframe.head())

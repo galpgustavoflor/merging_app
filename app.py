@@ -3,13 +3,33 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import json
+import time
+from typing import Union
+import dask.dataframe as dd
 
 from config import DASK_CONFIG, STREAMLIT_CONFIG, VALIDATION_CONFIG
 from constants import FILE_TYPES, Column, ValidationRule as VRule, Functions
-from utils import FileLoader, ConfigLoader, DataValidator, execute_matching_dask
+from utils import (
+    FileLoader, 
+    ConfigLoader, 
+    execute_matching_dask,
+    compute_basic_stats,
+    generate_null_value_plot,
+    generate_profile_report,
+    display_sample
+)
 from state import SessionState
+from connections.datahub_dask_connector import ClientDask
+
+import asyncio
+import nest_asyncio
+nest_asyncio.apply()
 
 logger = logging.getLogger(__name__)
+
+import streamlit as st
+from validators.data_validator import DataValidator
+from ui.components import DataDisplay, ValidationDisplay
 
 def main():
     st.set_page_config(page_title=STREAMLIT_CONFIG["page_title"])
@@ -19,42 +39,173 @@ def main():
     SessionState.initialize()
     step = st.session_state.step
 
-    if step == 1:
-        handle_source_file_upload()
-    elif step == 2:
-        handle_target_file_upload()
-    elif step == 3:
-        handle_mapping_rules()
-    elif step == 4:
-        handle_matching_execution()
-    elif step == 5:
-        handle_validation_rules()
-    elif step == 6:
-        handle_data_validation()
+    # Create UI handler for current step
+    step_handlers = {
+        1: lambda: handle_file_upload("source"),
+        2: lambda: handle_file_upload("target"),
+        3: handle_mapping_rules,
+        4: handle_matching_execution,
+        5: handle_validation_rules,
+        6: handle_data_validation
+    }
+    
+    if step in step_handlers:
+        step_handlers[step]()
 
-def handle_source_file_upload():
-    st.header("Step 1: Load Source File")
-    uploaded_source = st.file_uploader("Load Source File", type=FILE_TYPES, key="source_uploader")
-    if uploaded_source:
-        df = FileLoader.load_file(uploaded_source)
-        if df is not None:
-            SessionState.set_dataframe('df_source', df)
-            display_metadata(df, "Source Data")
-            if st.button("Next Step"):
-                st.session_state.step = 2
-                st.rerun()
+async def async_get_tables(_client, username, token):
+    from connections.datahub_dask_connector import ClientDask
+    client = ClientDask(username, token)
+    # Run the blocking list_tables() call in a separate thread
+    return await asyncio.to_thread(client.list_tables)
 
-def handle_target_file_upload():
-    st.header("Step 2: Load Target File")
-    uploaded_target = st.file_uploader("Load Target File", type=FILE_TYPES, key="target_uploader")
-    if uploaded_target:
-        df = FileLoader.load_file(uploaded_target)
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_datahub_tables(username: str, token: str) -> pd.DataFrame:
+    """Get tables from DataHub with caching."""
+    try:
+        with ClientDask(username, token) as client:
+            ddf_tables = client.list_tables()
+            ddf_tables['full_table_name'] = ddf_tables.map_partitions(
+                lambda x: x['TABLE_SCHEMA'] + '.' + x['TABLE_NAME'],
+                meta=('full_table_name', 'string')
+            )
+            return ddf_tables.compute()  # Convert to pandas DataFrame for caching
+    except Exception as e:
+        st.error(f"Error fetching tables: {str(e)}")
+        return None
+
+def handle_file_upload(file_type: str):
+    st.header(f"Step {1 if file_type == 'source' else 2}: Load {file_type.capitalize()} File")
+    source = st.radio("Select Source File Type", ["Local File", "DataHub"], key=f"{file_type}_source_type")
+    
+    if source == "Local File":
+        df = load_local_file(f"{file_type}_uploader")
         if df is not None:
-            SessionState.set_dataframe('df_target', df)
-            display_metadata(df, "Target Data")
+            SessionState.set_dataframe(f'df_{file_type}', df)
+            display_metadata(df, f"{file_type.capitalize()} Data")
             if st.button("Next Step"):
-                st.session_state.step = 3
+                st.session_state.step += 1
                 st.rerun()
+    
+    elif source == "DataHub":
+        df = load_datahub_file(file_type)  # Pass file_type to the function
+        if df is not None:
+            SessionState.set_dataframe(f'df_{file_type}', df)
+            display_metadata(df, f"{file_type.capitalize()} Data")
+            # Note: Next step button is now handled in load_datahub_file
+
+def load_local_file(uploader_key: str) -> Union[pd.DataFrame, None]:
+    uploaded_file = st.file_uploader("Load File", type=FILE_TYPES, key=uploader_key)
+    if uploaded_file:
+        return FileLoader.load_file(uploaded_file)
+    return None
+
+def load_datahub_file(file_type: str) -> Union[pd.DataFrame, None]:
+    username = st.text_input("Enter your DataHub username", key=f"{file_type}_username")
+    token = st.text_input("Enter your DataHub token", key=f"{file_type}_token", type="password")
+    query = None
+
+    if username and token:
+        try:
+            # First check connectivity
+            with st.expander("Connection Logs", expanded=True):
+                log_placeholder = st.empty()
+                client = ClientDask(username, token)
+                
+                # Capture and display logs
+                connection_status = client.check_host_reachable(client.host, client.port)
+                if not connection_status:
+                    log_placeholder.error("❌ Cannot reach DataHub! Please check your VPN connection.")
+                    return None
+                log_placeholder.info("✓ DataHub is reachable")
+
+            write_query = st.radio("Write your query here", ["Yes", "No"], key=f"{file_type}_write_query")
+            
+            if write_query == "Yes":
+                query = st.text_area("Write your query here", key=f"{file_type}_query")
+            else:
+                with st.spinner("Gathering tables from DataHub..."):
+                    try:
+                        tables_df = get_datahub_tables(username, token)
+                        if tables_df is not None:
+                            if len(tables_df) == 0:
+                                st.warning("No tables found")
+                                return None
+                            table = st.selectbox(
+                                "Select a table to stream",
+                                tables_df['full_table_name'].unique(),
+                                key=f"{file_type}_table"
+                            )
+                            if table:
+                                query = f"SELECT * FROM {table}"
+                    except Exception as e:
+                        st.error(f"Error connecting to DataHub: {str(e)}")
+                        return None
+
+            if query:  # Only show load button if query is defined
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    load_button = st.button("Load Data", key=f"load_datahub_{file_type}")
+                with col2:
+                    next_button = st.button("Next Step", key=f"next_step_{file_type}", disabled=True)
+                
+                if load_button:
+                    with st.spinner("Loading data from DataHub..."):
+                        try:
+                            with st.expander("Query Logs", expanded=True):
+                                log_output = st.empty()
+                            with ClientDask(username, token) as client:
+                                df = client.query(query)
+                                if df is not None:
+                                    st.success("Data loaded successfully!")
+                                    # Enable the Next Step button after successful load
+                                    st.session_state[f"data_loaded_{file_type}"] = True
+                                    st.rerun()  # Rerun to update the UI
+                                    return df
+                        except Exception as e:
+                            st.error(f"Error loading data: {str(e)}")
+                            logger.exception("Detailed error traceback:")
+                            return None
+                
+                # Show enabled Next Step button if data was loaded
+                if st.session_state.get(f"data_loaded_{file_type}", False):
+                    if st.button("Next Step", key=f"next_step_{file_type}_enabled"):
+                        st.session_state.step += 1
+                        st.rerun()
+        
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+            logger.error(f"DataHub error: {str(e)}", exc_info=True)
+    return None
+
+def stream_render_dataframe(ddf, sample_limit=100):
+    """
+    Streams the Dask DataFrame by computing partitions one-by-one.
+    Only displays up to sample_limit rows, while accumulating the full dataset.
+    """
+    # Convert the Dask DataFrame into delayed partitions.
+    delayed_parts = ddf.to_delayed()
+    
+    # Placeholder to update the UI
+    placeholder = st.empty()
+    accumulated_df = pd.DataFrame()
+    
+    st.info("Streaming results...")
+    total_partitions = len(delayed_parts)
+    
+    for i, delayed_part in enumerate(delayed_parts):
+        # Compute each partition
+        partition_df = delayed_part.compute()
+        accumulated_df = pd.concat([accumulated_df, partition_df], ignore_index=True)
+        
+        # Display only up to the sample_limit number of rows
+        display_df = accumulated_df.head(sample_limit)
+        placeholder.dataframe(display_df)
+        st.write(f"Loaded partition {i+1}/{total_partitions}. Displaying {len(display_df)} rows (sample limit: {sample_limit}).")
+        
+        # Optional: small delay for visible streaming effect
+        time.sleep(0.5)
+    
+    return accumulated_df
 
 def handle_mapping_rules():
     st.header("Step 3: Define Mapping Rules and Keys")
@@ -200,39 +351,72 @@ def handle_validation_rules():
     
     if st.button("Next Step"):
         st.session_state.step = 6
-        #st.experimental_rerun()
+        st.rerun()
 
 def handle_data_validation():
     st.header("Step 6: Execute Data Validation")
     df_target = st.session_state.get("df_target")
     validation_rules = st.session_state.get("validation_rules", {})
+    
     if df_target is None or not validation_rules:
         st.error("Target data and validation rules are required.")
         return
     
-    results = DataValidator.execute_validation(df_target, validation_rules)
-    st.session_state.validation_results = results
-    
-    display_validation_summary(results)
-    display_detailed_validation_results(df_target, results, validation_rules)
+    validator = DataValidator(validation_rules)
+    try:
+        results = validator.validate(df_target)
+        st.session_state.validation_results = results
+        
+        ValidationDisplay.show_validation_results(results, df_target)
+        
+    except Exception as e:
+        st.error(f"Validation error: {str(e)}")
     
     if st.button("Step Back"):
         st.session_state.step = 5
-        st.experimental_rerun()
+        st.rerun()
 
-def display_metadata(df: pd.DataFrame, title: str):
+def display_metadata(df: Union[pd.DataFrame, dd.DataFrame], title: str):
     st.subheader(title)
+    
+    # Display sample data
     st.write("Data Preview:")
-    st.dataframe(df.head())
-    st.write("Statistical Summary:")
-    st.write(df.describe(include='all'))
-    st.write("Data Types:")
-    st.write(df.dtypes)
-    st.write("Null Values by Column:")
-    null_counts = df.isnull().sum().reset_index()
-    null_counts.columns = [df.columns[0] if len(df.columns)>0 else "Column", "Null Count"]
-    fig = px.bar(null_counts, x=null_counts.columns[0], y="Null Count", title="Null Values by Column")
-    st.plotly_chart(fig)
+    st.dataframe(display_sample(df))
+    
+    # Compute and display basic statistics
+    with st.spinner("Computing basic statistics..."):
+        stats = compute_basic_stats(df)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Rows", stats['row_count'])
+        with col2:
+            st.metric("Total Columns", stats['column_count'])
+        
+        st.write("Data Types:")
+        st.write(pd.Series(stats['dtypes']))
+        
+        if 'numeric_summary' in stats:
+            st.write("Statistical Summary (Numeric Columns):")
+            st.dataframe(stats['numeric_summary'])
+    
+    # Display null values visualization
+    with st.spinner("Generating null values visualization..."):
+        fig = generate_null_value_plot(stats['null_counts'], title)
+        st.plotly_chart(fig)
+    
+    # Generate and display detailed profile report
+    profile_key = f"show_profile_{title.lower().replace(' ', '_')}"
+    show_profile_report = st.checkbox("Show Detailed Profile Report", key=profile_key)
+    
+    if show_profile_report:
+        try:
+            with st.spinner("Generating profile report... This may take a while for large datasets."):
+                profile = generate_profile_report(df, title)
+                st.components.v1.html(profile.to_html(), height=600, scrolling=True)
+        except Exception as e:
+            st.error(f"Error generating profile report: {str(e)}")
+            logger.exception("Profile report generation failed:")
 
 def display_validation_summary(validation_results: list):
     st.subheader("Validation Results Summary")
@@ -268,7 +452,7 @@ def display_detailed_validation_results(df: pd.DataFrame, validation_results: li
             elif rule == "Values out of range":
                 st.write(f"Out of range count: {result['Fail']}")
                 min_val = validation_rules[col].get(VRule.MIN_VALUE.value)
-                max_val = validation_rules[col].get(VRule.MAX_VALUE.value)
+                max_val = validation_rules.col.get(VRule.MAX_VALUE.value)
                 numeric_col = pd.to_numeric(df[col], errors='coerce')
                 condition = numeric_col.notnull()
                 if min_val is not None:
@@ -277,6 +461,51 @@ def display_detailed_validation_results(df: pd.DataFrame, validation_results: li
                     condition &= (numeric_col > float(max_val))
                 st.dataframe(df[condition])
             st.write("---")
+
+if __name__ == "__main__":
+    main()
+
+import logging
+import streamlit as st
+from state import SessionState
+from ui.pages import (
+    FileUploadPage,
+    MappingPage,
+    MatchingPage,
+    ValidationPage
+)
+from utils.logging_config import setup_logging
+
+logger = logging.getLogger(__name__)
+
+class App:
+    def __init__(self):
+        self.pages = {
+            1: FileUploadPage("source"),
+            2: FileUploadPage("target"),
+            3: MappingPage(),
+            4: MatchingPage(),
+            5: ValidationPage()
+        }
+        setup_logging()
+
+    def run(self):
+        st.set_page_config(page_title="File Mapping and Validation Process")
+        st.title("File Mapping and Validation Process")
+        
+        SessionState.initialize()
+        current_step = st.session_state.step
+        
+        try:
+            if current_step in self.pages:
+                self.pages[current_step].render()
+        except Exception as e:
+            logger.error(f"Error in step {current_step}: {str(e)}", exc_info=True)
+            st.error(f"An error occurred: {str(e)}")
+
+def main():
+    app = App()
+    app.run()
 
 if __name__ == "__main__":
     main()
