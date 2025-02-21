@@ -1,6 +1,7 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 import pandas as pd
 import streamlit as st
+import dask.dataframe as dd
 from constants import Step
 import logging
 
@@ -27,10 +28,15 @@ class SessionState:
             st.session_state.validation_results = None
 
     @staticmethod
-    def set_dataframe(key: str, df: pd.DataFrame) -> None:
+    def is_valid_dataframe(df: Union[pd.DataFrame, dd.DataFrame]) -> bool:
+        """Check if input is a valid DataFrame."""
+        return isinstance(df, (pd.DataFrame, dd.DataFrame))
+
+    @staticmethod
+    def set_dataframe(key: str, df: Union[pd.DataFrame, dd.DataFrame]) -> None:
         """Safely store DataFrame in session state"""
         try:
-            if not isinstance(df, pd.DataFrame):
+            if not SessionState.is_valid_dataframe(df):
                 raise ValueError("Invalid dataframe")
             st.session_state[key] = df
             logger.info(f"Successfully stored DataFrame '{key}' in session state")
@@ -39,7 +45,7 @@ class SessionState:
             raise
 
     @staticmethod
-    def get_dataframe(key: str) -> Optional[pd.DataFrame]:
+    def get_dataframe(key: str) -> Union[pd.DataFrame, dd.DataFrame, None]:
         """Safely retrieve DataFrame from session state"""
         try:
             if key not in st.session_state:
@@ -98,3 +104,14 @@ class SessionState:
         except Exception as e:
             logger.error(f"Error clearing key '{key}' from session state: {str(e)}")
             raise
+
+    @staticmethod
+    def clear_dataframe(key: str) -> None:
+        """Clear DataFrame from session state."""
+        if key in st.session_state:
+            del st.session_state[key]
+
+    @staticmethod
+    def has_dataframe(key: str) -> bool:
+        """Check if DataFrame exists in session state."""
+        return key in st.session_state and st.session_state[key] is not None
