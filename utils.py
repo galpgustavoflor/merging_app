@@ -1,6 +1,7 @@
 import logging
 import logging.config
 from typing import Optional, Tuple, Dict, List, Union, Any
+from abc import ABC, abstractmethod
 import pandas as pd
 import dask.dataframe as dd
 import dask
@@ -10,14 +11,52 @@ from pathlib import Path
 from constants import ValidationRule as VRule, FILE_TYPES, Column, Functions
 from config import LOGGING_CONFIG, DASK_CONFIG, STREAMLIT_CONFIG
 import numpy as np
+import yaml
 
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
-class FileLoader:
+class DataLoader(ABC):
+    """Abstract base class for data loading operations."""
+    
+    @abstractmethod
+    def load(self, source) -> Union[pd.DataFrame, dd.DataFrame]:
+        """Load data from a source into a DataFrame."""
+        pass
+
+    @staticmethod
+    def _process_dataframe(df: Union[pd.DataFrame, dd.DataFrame]) -> Union[pd.DataFrame, dd.DataFrame]:
+        """Common DataFrame processing logic."""
+        try:
+            if isinstance(df, dd.DataFrame):
+                df = df.map_partitions(lambda pdf: pdf.convert_dtypes())
+                df.columns = [col.strip().replace("\ufeff", "") for col in df.columns]
+                return df
+            else:
+                df = df.convert_dtypes()
+                df.columns = df.columns.str.strip().str.replace("\ufeff", "", regex=True)
+                for col in df.columns:
+                    if pd.api.types.is_object_dtype(df[col]):
+                        numeric_col = pd.to_numeric(df[col], errors='ignore')
+                        if not pd.api.types.is_object_dtype(numeric_col):
+                            df[col] = numeric_col
+                return df
+        except Exception as e:
+            logger.error(f"Error processing dataframe: {str(e)}", exc_info=True)
+            raise
+
+class FileLoader(DataLoader):
+    """Handles loading data from file sources."""
+    
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def load_file(uploaded_file) -> Union[pd.DataFrame, dd.DataFrame]:
+        """Maintained for backward compatibility."""
+        loader = FileLoader()
+        return loader.load(uploaded_file)
+
     @staticmethod
     def _should_use_dask(file_size: int) -> bool:
-        # Use Dask if file size is greater than 500MB
         return file_size > (500 * 1024 * 1024)
 
     @staticmethod
@@ -56,9 +95,8 @@ class FileLoader:
             logger.warning(f"Error detecting delimiter: {str(e)}. Using default ','")
             return ','
 
-    @staticmethod
-    @st.cache_data(ttl=3600)
-    def load_file(uploaded_file) -> Union[pd.DataFrame, dd.DataFrame]:
+    def load(self, uploaded_file) -> Union[pd.DataFrame, dd.DataFrame]:
+        """Implementation of abstract load method."""
         try:
             max_size = STREAMLIT_CONFIG["max_file_size"] * 1024 * 1024
             if uploaded_file.size > max_size:
@@ -71,50 +109,9 @@ class FileLoader:
             use_dask = FileLoader._should_use_dask(uploaded_file.size)
             
             if file_path.suffix == '.xlsx':
-                if use_dask:
-                    # For xlsx, we need to read with pandas first, then convert to dask
-                    df = pd.read_excel(uploaded_file, engine='openpyxl')
-                    df = FileLoader._process_dataframe(df)
-                    return dd.from_pandas(df, npartitions=DASK_CONFIG["npartitions"])
-                else:
-                    df = pd.read_excel(uploaded_file, engine='openpyxl')
-            else:  # CSV file
-                # Detect delimiter
-                delimiter = FileLoader._detect_delimiter(uploaded_file)
-                uploaded_file.seek(0)  # Reset file position after delimiter detection
-                
-                if use_dask:
-                    return dd.read_csv(
-                        uploaded_file,
-                        sep=delimiter,
-                        encoding='utf-8',
-                        encoding_errors='replace',
-                        on_bad_lines='warn'
-                    )
-                else:
-                    try:
-                        df = pd.read_csv(
-                            uploaded_file,
-                            sep=delimiter,
-                            encoding='utf-8',
-                            encoding_errors='replace',
-                            engine='c',
-                            on_bad_lines='warn',
-                            low_memory=False
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to read with 'c' engine: {str(e)}. Trying 'python' engine...")
-                        uploaded_file.seek(0)  # Reset file position
-                        df = pd.read_csv(
-                            uploaded_file,
-                            sep=delimiter,
-                            encoding='utf-8',
-                            encoding_errors='replace',
-                            engine='python',
-                            on_bad_lines='skip'
-                        )
-            
-            return FileLoader._process_dataframe(df)
+                return self._load_excel(uploaded_file, use_dask)
+            else:
+                return self._load_csv(uploaded_file, use_dask)
 
         except Exception as e:
             logger.error("Error loading file", exc_info=True, extra={
@@ -124,27 +121,75 @@ class FileLoader:
             })
             raise RuntimeError(f"Failed to load file: {str(e)}") from e
 
-    @staticmethod
-    def _process_dataframe(df: Union[pd.DataFrame, dd.DataFrame]) -> Union[pd.DataFrame, dd.DataFrame]:
+    def _load_excel(self, file, use_dask: bool) -> Union[pd.DataFrame, dd.DataFrame]:
+        """Handle Excel file loading."""
+        df = pd.read_excel(file, engine='openpyxl')
+        df = self._process_dataframe(df)
+        if use_dask:
+            return dd.from_pandas(df, npartitions=DASK_CONFIG["npartitions"])
+        return df
+
+    def _load_csv(self, file, use_dask: bool) -> Union[pd.DataFrame, dd.DataFrame]:
+        """Handle CSV file loading."""
+        delimiter = self._detect_delimiter(file)
+        file.seek(0)
+
+        if use_dask:
+            return dd.read_csv(
+                file,
+                sep=delimiter,
+                encoding='utf-8',
+                encoding_errors='replace',
+                on_bad_lines='warn'
+            )
+        
         try:
-            if isinstance(df, dd.DataFrame):
-                # Process Dask DataFrame
-                df = df.map_partitions(lambda pdf: pdf.convert_dtypes())
-                df.columns = [col.strip().replace("\ufeff", "") for col in df.columns]
-                return df
-            else:
-                # Process Pandas DataFrame
-                df = df.convert_dtypes()
-                df.columns = df.columns.str.strip().str.replace("\ufeff", "", regex=True)
-                for col in df.columns:
-                    if pd.api.types.is_object_dtype(df[col]):
-                        numeric_col = pd.to_numeric(df[col], errors='ignore')
-                        if not pd.api.types.is_object_dtype(numeric_col):
-                            df[col] = numeric_col
-                return df
+            df = pd.read_csv(
+                file,
+                sep=delimiter,
+                encoding='utf-8',
+                encoding_errors='replace',
+                engine='c',
+                on_bad_lines='warn',
+                low_memory=False
+            )
         except Exception as e:
-            logger.error(f"Error processing dataframe: {str(e)}", exc_info=True)
-            raise
+            logger.warning(f"Failed to read with 'c' engine: {str(e)}. Trying 'python' engine...")
+            file.seek(0)
+            df = pd.read_csv(
+                file,
+                sep=delimiter,
+                encoding='utf-8',
+                encoding_errors='replace',
+                engine='python',
+                on_bad_lines='skip'
+            )
+        
+        return self._process_dataframe(df)
+
+class DatabaseLoader(DataLoader):
+    """Handles loading data from database sources."""
+    
+    def __init__(self, connection_params: Dict[str, str]):
+        self.connection_params = connection_params
+
+    def load(self, query: str) -> Union[pd.DataFrame, dd.DataFrame]:
+        """Load data from a database using SQL query."""
+        # Implementation for database loading
+        # This is a placeholder for future implementation
+        raise NotImplementedError("Database loading not yet implemented")
+
+class APILoader(DataLoader):
+    """Handles loading data from API endpoints."""
+    
+    def __init__(self, api_config: Dict[str, str]):
+        self.api_config = api_config
+
+    def load(self, endpoint: str) -> Union[pd.DataFrame, dd.DataFrame]:
+        """Load data from an API endpoint."""
+        # Implementation for API data loading
+        # This is a placeholder for future implementation
+        raise NotImplementedError("API loading not yet implemented")
 
 def clean_dataframe_for_display(df: pd.DataFrame) -> pd.DataFrame:
     """Clean and convert DataFrame types for Arrow compatibility."""
@@ -556,6 +601,36 @@ def execute_matching_dask(df_source: Union[pd.DataFrame, dd.DataFrame],
         # Apply mapping rules to source DataFrame
         df_source = apply_rules(df_source, mapping_config)
         
+        # Log data types before merge for debugging
+        source_dtypes = {col: str(df_source[col].dtype) for col in key_source}
+        target_dtypes = {col: str(df_target[col].dtype) for col in key_target}
+        
+        # Check for data type mismatches
+        mismatches = []
+        for s_col, t_col in zip(key_source, key_target):
+            if source_dtypes[s_col] != target_dtypes[t_col]:
+                mismatches.append({
+                    'columns': f"({s_col}, {t_col})",
+                    'left_dtype': source_dtypes[s_col],
+                    'right_dtype': target_dtypes[t_col]
+                })
+        
+        if mismatches:
+            # Create user-friendly warning message
+            warning_msg = (
+                "⚠️ Data Type Mismatch Warning:\n\n"
+                "The following columns have different data types between source and target files:\n\n"
+            )
+            for mismatch in mismatches:
+                warning_msg += (
+                    f"• Columns: {mismatch['columns']}\n"
+                    f"  - Source type: {mismatch['left_dtype']}\n"
+                    f"  - Target type: {mismatch['right_dtype']}\n"
+                )
+            warning_msg += "\nThe merge will proceed but results may be unexpected. Consider standardizing data types in your source files."
+            
+            st.warning(warning_msg)
+        
         # Ensure proper types for merge keys
         for col in key_source:
             df_source[col] = df_source[col].astype(str)
@@ -605,3 +680,80 @@ def handle_large_file(file_path: str, chunk_size: int = 10000) -> pd.DataFrame:
     for chunk in pd.read_csv(file_path, chunksize=chunk_size):
         chunks.append(chunk)
     return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
+
+def generate_soda_yaml(validation_rules: Dict[str, Dict[str, Any]], table_name: str = "your_table") -> str:
+    """
+    Generate a SODA CLI YAML configuration from validation rules.
+    
+    Args:
+        validation_rules: Dictionary of validation rules
+        table_name: Name of the table to validate
+        
+    Returns:
+        str: YAML configuration for SODA CLI
+    """
+    soda_checks = {
+        "checks for " + table_name: []
+    }
+    
+    for col, rules in validation_rules.items():
+        # Null checks
+        if rules.get(VRule.VALIDATE_NULLs.value, False):
+            soda_checks["checks for " + table_name].append({
+                "name": f"Check nulls in {col}",
+                "not null": col
+            })
+        
+        # Uniqueness checks
+        if rules.get(VRule.VALIDATE_UNIQUENESS.value, False):
+            soda_checks["checks for " + table_name].append({
+                "name": f"Check uniqueness of {col}",
+                "unique": col
+            })
+        
+        # Value list checks
+        if VRule.VALIDATE_LIST_OF_VALUES.value in rules:
+            allowed_values = rules[VRule.VALIDATE_LIST_OF_VALUES.value]
+            soda_checks["checks for " + table_name].append({
+                "name": f"Check allowed values in {col}",
+                "valid values": {
+                    "column": col,
+                    "values": allowed_values
+                }
+            })
+        
+        # Regex pattern checks
+        if VRule.VALIDATE_REGEX.value in rules:
+            pattern = rules[VRule.VALIDATE_REGEX.value]
+            soda_checks["checks for " + table_name].append({
+                "name": f"Check format of {col}",
+                "regex match": {
+                    "column": col,
+                    "regex": pattern
+                }
+            })
+        
+        # Range checks
+        if rules.get(VRule.VALIDATE_RANGE.value, False):
+            min_val = rules.get(VRule.MIN_VALUE.value)
+            max_val = rules.get(VRule.MAX_VALUE.value)
+            
+            if min_val is not None:
+                soda_checks["checks for " + table_name].append({
+                    "name": f"Check minimum value of {col}",
+                    "min": {
+                        "column": col,
+                        "min": float(min_val)
+                    }
+                })
+            
+            if max_val is not None:
+                soda_checks["checks for " + table_name].append({
+                    "name": f"Check maximum value of {col}",
+                    "max": {
+                        "column": col,
+                        "max": float(max_val)
+                    }
+                })
+    
+    return yaml.dump(soda_checks, sort_keys=False, allow_unicode=True)

@@ -10,7 +10,7 @@ from fpdf import FPDF  # new import for PDF generation
 
 from config import DASK_CONFIG, STREAMLIT_CONFIG, VALIDATION_CONFIG
 from constants import FILE_TYPES, Column, ValidationRule as VRule, Functions, Step, STEP_LABELS
-from utils import FileLoader, ConfigLoader, DataValidator, execute_matching_dask, clean_dataframe_for_display
+from utils import FileLoader, ConfigLoader, DataValidator, execute_matching_dask, clean_dataframe_for_display, generate_soda_yaml
 from state import SessionState
 
 logger = logging.getLogger(__name__)
@@ -587,6 +587,25 @@ def handle_report_summary():
     st.markdown(f"<div style='margin-top: 1em;'><strong>Report Generated At:</strong> {timestamp}</div>", unsafe_allow_html=True)
     st.markdown(f"<div><strong>Report Checksum (SHA256):</strong> {report_checksum}</div>", unsafe_allow_html=True)
     
+    st.subheader("SODA CLI Configuration")
+    validation_config = st.session_state.get("validation_rules", {})
+    if validation_config:
+        table_name = st.text_input("Table name for SODA checks", "your_table")
+        soda_yaml = generate_soda_yaml(validation_config, table_name)
+        
+        st.code(soda_yaml, language="yaml")
+        
+        # Add download button for SODA configuration
+        st.download_button(
+            label="Download SODA Configuration",
+            data=soda_yaml,
+            file_name="soda_checks.yml",
+            mime="text/yaml"
+        )
+    else:
+        st.info("No validation configuration available for SODA CLI.")
+  
+
     # Generate PDF report using report_json as content
     pdf_data = generate_pdf_report(report_json, source_summary, target_summary, checksum_note, mapping, matching_results, validation_config, validation_results)
     st.download_button("Download Audit Report (PDF)", data=pdf_data, file_name="audit_report.pdf", mime="application/pdf")
@@ -724,17 +743,23 @@ def display_metadata(df: pd.DataFrame, title: str):
         
         with tabs[1]:
             st.markdown('<div class="data-preview">', unsafe_allow_html=True)
+            # Sort columns for summary
             summary_df = clean_dataframe_for_display(df.describe(include='all'))
+            summary_df = summary_df.reindex(sorted(summary_df.columns), axis=1)
             st.dataframe(summary_df, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
         with tabs[2]:
             st.markdown('<div class="data-preview">', unsafe_allow_html=True)
-            st.write(display_df.dtypes)
+            # Sort columns for data types
+            dtype_series = display_df.dtypes.sort_index(ascending=False).reset_index()
+            dtype_series.columns = ["Column", "Type"]
+            st.write(dtype_series)
             st.markdown('</div>', unsafe_allow_html=True)
         
         with tabs[3]:
-            null_counts = display_df.isnull().sum().reset_index()
+            # Sort columns for null analysis
+            null_counts = display_df.isnull().sum().sort_index(ascending=False).reset_index()
             null_counts.columns = ["Column", "Null Count"]
             fig = px.bar(
                 null_counts,
