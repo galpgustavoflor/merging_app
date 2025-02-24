@@ -12,12 +12,15 @@ class SessionState:
 
     @staticmethod
     def initialize() -> None:
+        """Initialize session state variables."""
         if 'step' not in st.session_state:
             st.session_state.step = Step.SOURCE_UPLOAD.value
         if 'df_source' not in st.session_state:
             st.session_state.df_source = None
         if 'df_target' not in st.session_state:
             st.session_state.df_target = None
+        if 'columns' not in st.session_state:
+            st.session_state.columns = []
         if 'mapping' not in st.session_state:
             st.session_state.mapping = {}
         if 'validation_rules' not in st.session_state:
@@ -26,6 +29,18 @@ class SessionState:
             st.session_state.matching_results = None
         if 'validation_results' not in st.session_state:
             st.session_state.validation_results = None
+        if 'business_rules' not in st.session_state:
+            st.session_state.business_rules = []
+        if 'current_rule' not in st.session_state:
+            st.session_state.current_rule = {
+                'name': '',
+                'conditions': [],
+                'then': []
+            }
+        if 'rule_name' not in st.session_state:
+            st.session_state.rule_name = ''
+        if 'columns' not in st.session_state:
+            st.session_state.columns = []
 
     @staticmethod
     def is_valid_dataframe(df: Union[pd.DataFrame, dd.DataFrame]) -> bool:
@@ -39,6 +54,9 @@ class SessionState:
             if not SessionState.is_valid_dataframe(df):
                 raise ValueError("Invalid dataframe")
             st.session_state[key] = df
+            # Update columns when target DataFrame is set
+            if key == 'df_target':
+                st.session_state.columns = df.columns.tolist()
             logger.info(f"Successfully stored DataFrame '{key}' in session state")
         except Exception as e:
             logger.error(f"Error storing DataFrame '{key}': {str(e)}")

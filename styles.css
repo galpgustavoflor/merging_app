@@ -112,6 +112,10 @@
     padding: 0.5rem;
 }
 
+.stTextInput > div > div {
+    border-radius: 0.3rem;
+}
+
 /* File uploader styling */
 .stFileUploader > div {
     border: 2px dashed #B0BEC5;
@@ -150,4 +154,65 @@
     .content-card {
         padding: 1rem;
     }
+}
+
+/* Add these new styles */
+.validation-section {
+    background-color: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.validation-header {
+    color: #FF6600;
+    margin-bottom: 1.5rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    border-bottom: 2px solid #FF6600;
+    padding-bottom: 0.5rem;
+}
+
+/* Style for expandable sections */
+.streamlit-expanderHeader {
+    background-color: white !important;
+    border-radius: 0.3rem;
+    margin-bottom: 0.5rem;
+}
+
+.streamlit-expanderHeader:hover {
+    background-color: #f8f9fa !important;
+}
+
+/* Checkbox styling */
+.stCheckbox {
+    padding: 0.5rem 0;
+}
+
+/* Validation rules specific styles */
+.validation-group {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    border: 1px solid #e9ecef;
+}
+
+.validation-group-header {
+    color: #FF6600;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #FF6600;
+}
+
+.validation-item {
+    background: white;
+    border-radius: 4px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border: 1px solid #e9ecef;
 }

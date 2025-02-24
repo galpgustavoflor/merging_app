@@ -51,3 +51,49 @@ STEP_LABELS = {
     Step.DATA_VALIDATION: "Execute Validation",
     Step.REPORT_SUMMARY: "View Report"
 }
+
+# Business Rule Operators
+COMPARISON_OPERATORS = {
+    'equals': '==',
+    'not_equals': '!=',
+    'greater_than': '>',
+    'less_than': '<',
+    'greater_equal': '>=',
+    'less_equal': '<=',
+    'contains': 'contains',
+    'is_null': 'is null',
+    'is_not_null': 'is not null'
+}
+
+LOGICAL_OPERATORS = ['AND', 'OR']
+
+# Example business rules for guidance
+EXAMPLE_RULES = [
+    {
+        'name': 'Active Account Balance Check',
+        'conditions': [
+            {'column': 'status', 'operator': 'equals', 'value': 'Active'}
+        ],
+        'then': [
+            {'column': 'balance', 'operator': 'greater_than', 'value': '0'}
+        ]
+    },
+    {
+        'name': 'Premium Customer Discount Rule',
+        'conditions': [
+            {'column': 'customer_type', 'operator': 'equals', 'value': 'Premium'}
+        ],
+        'then': [
+            {'column': 'discount', 'operator': 'less_equal', 'value': '20'}
+        ]
+    },
+    {
+        'name': 'Sales Department Region Check',
+        'conditions': [
+            {'column': 'department', 'operator': 'equals', 'value': 'Sales'}
+        ],
+        'then': [
+            {'column': 'region', 'operator': 'is_not_null', 'value': ''}
+        ]
+    }
+]

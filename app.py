@@ -9,8 +9,13 @@ import datetime  # <-- new import for timestamp
 from fpdf import FPDF  # new import for PDF generation
 
 from config import DASK_CONFIG, STREAMLIT_CONFIG, VALIDATION_CONFIG
-from constants import FILE_TYPES, Column, ValidationRule as VRule, Functions, Step, STEP_LABELS
-from utils import FileLoader, ConfigLoader, DataValidator, execute_matching_dask, clean_dataframe_for_display, generate_soda_yaml
+from constants import FILE_TYPES, Column, ValidationRule as VRule, Functions, Step, STEP_LABELS, COMPARISON_OPERATORS, LOGICAL_OPERATORS, EXAMPLE_RULES
+from utils import (
+    FileLoader, ConfigLoader, DataValidator, execute_matching_dask, 
+    clean_dataframe_for_display, generate_soda_yaml,
+    validate_business_rule, validate_all_business_rules,  # Add these imports
+    format_rule_as_sentence
+)
 from state import SessionState
 
 logger = logging.getLogger(__name__)
@@ -73,6 +78,18 @@ def main():
         st.session_state.matching_results = None
     if 'validation_results' not in st.session_state:
         st.session_state.validation_results = None
+    if 'business_rules' not in st.session_state:
+        st.session_state.business_rules = []
+    if 'current_rule' not in st.session_state:
+        st.session_state.current_rule = {
+            'name': '',
+            'conditions': [],
+            'then': []
+        }
+    if 'rule_name' not in st.session_state:
+        st.session_state.rule_name = ''
+    if 'columns' not in st.session_state:
+        st.session_state.columns = []
 
     inject_custom_css()
     
@@ -394,7 +411,7 @@ def handle_matching_execution():
 def handle_validation_rules():
     st.header("Step 5: Define Validation Rules")
     
-    # Fixed check for matching results before proceeding
+    # Initial checks
     if st.session_state.get("matching_results") is None:
         st.error("Please complete the matching step first.")
         step_navigation(next=False)
@@ -404,68 +421,423 @@ def handle_validation_rules():
     if df_target is None:
         st.error("Please load the target file first.")
         return
+
+    # Initialize columns in session state
+    if 'columns' not in st.session_state:
+        st.session_state.columns = df_target.columns.tolist()
     
-    with st.expander("Upload JSON File for Validation Rules"):
-        uploaded_json = st.file_uploader("Load Validation Rules from JSON", type=["json"], key="validation_json")
-        if uploaded_json:
-            ConfigLoader.load_validations_from_json(uploaded_json)
+    if not st.session_state.columns:
+        st.error("No columns available in target data.")
+        return
+
+    # Rest of the validation rules code
+    main_tabs = st.tabs(["📊 Data Quality Rules", "🔍 Business Rules"])
     
-    validation_rules = st.session_state.get("validation_rules", {})
-    for col in df_target.columns:
-        with st.expander(f"Configure validation for '{col}'"):
-            if st.checkbox("Check Nulls", key=f"nulls_{col}", value=validation_rules.get(col, {}).get(VRule.VALIDATE_NULLS.value, False)):
-                validation_rules.setdefault(col, {})[VRule.VALIDATE_NULLS.value] = True
-            if st.checkbox("Check Uniqueness", key=f"unique_{col}", value=validation_rules.get(col, {}).get(VRule.VALIDATE_UNIQUENESS.value, False)):
-                validation_rules.setdefault(col, {})[VRule.VALIDATE_UNIQUENESS.value] = True
-            if st.checkbox("Check Allowed Values", key=f"domain_{col}", value=bool(validation_rules.get(col, {}).get(VRule.VALIDATE_LIST_OF_VALUES.value))):
-                allowed_values = st.text_input("Allowed Values (comma separated)", key=f"domain_values_{col}", value=",".join(validation_rules.get(col, {}).get(VRule.VALIDATE_LIST_OF_VALUES.value, [])))
-                validation_rules.setdefault(col, {})[VRule.VALIDATE_LIST_OF_VALUES.value] = [val.strip() for val in allowed_values.split(',') if val.strip()]
-            if st.checkbox("Check Format (Regex)", key=f"regex_{col}", value=bool(validation_rules.get(col, {}).get(VRule.VALIDATE_REGEX.value))):
-                regex_pattern = st.text_input("Regex Pattern", key=f"regex_pattern_{col}", value=validation_rules.get(col, {}).get(VRule.VALIDATE_REGEX.value, ""))
-                validation_rules.setdefault(col, {})[VRule.VALIDATE_REGEX.value] = regex_pattern
-            if pd.api.types.is_numeric_dtype(df_target[col]):
-                if st.checkbox("Check Range", key=f"range_{col}", value=bool(validation_rules.get(col, {}).get(VRule.VALIDATE_RANGE.value))):
-                    validation_rules.setdefault(col, {})[VRule.VALIDATE_RANGE.value] = True
-                    has_min = st.checkbox("Set Minimum", key=f"has_min_{col}", value=validation_rules.get(col, {}).get(VRule.MIN_VALUE.value) is not None)
-                    if has_min:
-                        min_value = st.number_input("Minimum Value", key=f"min_{col}", value=validation_rules.get(col, {}).get(VRule.MIN_VALUE.value, 0.0))
-                        validation_rules[col][VRule.MIN_VALUE.value] = min_value
+    with main_tabs[0]:
+        st.markdown("""<style>
+            .validation-card {
+                background-color: var(--background-color);
+                border: 1px solid var(--primary-color);
+                border-radius: 0.5rem;
+                padding: 1rem;
+                margin: 1rem 0;
+            }
+            .validation-card h4 {
+                color: var(--primary-color);
+                margin-bottom: 1rem;
+            }
+            [data-testid="stExpander"] {
+                background-color: var(--background-color);
+                border: 1px solid rgba(250, 250, 250, 0.2);
+            }
+        </style>""", unsafe_allow_html=True)
+        
+        # Upload section with improved styling and debugging
+        st.markdown('<div class="validation-card">', unsafe_allow_html=True)
+        
+        # Show current validation rules status
+        rules_count = len(st.session_state.get("validation_rules", {}))
+        if rules_count > 0:
+            st.info(f"Currently active validation rules: {rules_count}")
+        
+        # File uploader for validation rules
+        uploaded_json = st.file_uploader(
+            "Load Validation Rules from JSON", 
+            type=["json"], 
+            key="validation_json_upload",
+            help="Upload predefined validation rules"
+        )
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Initialize validation rules from session state
+        if 'validation_rules' not in st.session_state:
+            st.session_state.validation_rules = {}
+
+        # Load validation rules from JSON with better error handling
+        if uploaded_json is not None:
+            try:
+                content = uploaded_json.read()
+                validation_data = json.loads(content.decode('utf-8'))
+                
+                if isinstance(validation_data, dict):
+                    st.session_state.validation_rules = validation_data
+                    st.success(f"Successfully loaded {len(validation_data)} validation rules!")
+                    with st.expander("View loaded rules"):
+                        st.json(validation_data)
+                else:
+                    st.error("Invalid validation rules structure. Expected a dictionary.")
+            except json.JSONDecodeError as e:
+                st.error(f"Invalid JSON format: {str(e)}")
+            except Exception as e:
+                st.error(f"Error loading validation rules: {str(e)}")
+                logger.error(f"Validation rules loading error: {e}", exc_info=True)
+
+        # Get current validation rules
+        validation_rules = st.session_state.validation_rules
+
+        # Debug info - show current state
+        if st.checkbox("Debug: Show Current Validation Rules"):
+            st.write("Current Validation Rules:", validation_rules)
+
+        # Group columns by data type (fix the text_cols definition)
+        numeric_cols = [col for col in df_target.columns if pd.api.types.is_numeric_dtype(df_target[col])]
+        text_cols = [col for col in df_target.columns if col not in numeric_cols]  # Fixed line
+        
+        # Create sections for different column types
+        if numeric_cols:
+            st.subheader("Numeric Columns")
+            for col in numeric_cols:
+                with st.expander(f"📊 {col}", expanded=col in validation_rules):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.checkbox("Check Nulls", key=f"nulls_{col}", 
+                                     value=validation_rules.get(col, {}).get(VRule.VALIDATE_NULLS.value, False)):
+                            validation_rules.setdefault(col, {})[VRule.VALIDATE_NULLS.value] = True
+                        
+                        if st.checkbox("Check Uniqueness", key=f"unique_{col}", 
+                                     value=validation_rules.get(col, {}).get(VRule.VALIDATE_UNIQUENESS.value, False)):
+                            validation_rules.setdefault(col, {})[VRule.VALIDATE_UNIQUENESS.value] = True
+                    
+                    with col2:
+                        if st.checkbox("Check Range", key=f"range_{col}", 
+                                     value=validation_rules.get(col, {}).get(VRule.VALIDATE_RANGE.value, False)):
+                            validation_rules.setdefault(col, {})[VRule.VALIDATE_RANGE.value] = True
+                            min_col, max_col = st.columns(2)
+                            with min_col:
+                                if st.checkbox("Set Min", key=f"has_min_{col}",
+                                             value=validation_rules.get(col, {}).get(VRule.MIN_VALUE.value) is not None):
+                                    min_value = st.number_input(
+                                        "Min Value",
+                                        key=f"min_{col}",
+                                        value=float(validation_rules.get(col, {}).get(VRule.MIN_VALUE.value, 0.0))
+                                    )
+                                    validation_rules[col][VRule.MIN_VALUE.value] = min_value
+                            with max_col:
+                                if st.checkbox("Set Max", key=f"has_max_{col}",
+                                             value=validation_rules.get(col, {}).get(VRule.MAX_VALUE.value) is not None):
+                                    max_value = st.number_input(
+                                        "Max Value",
+                                        key=f"max_{col}",
+                                        value=float(validation_rules.get(col, {}).get(VRule.MAX_VALUE.value, 0.0))
+                                    )
+                                    validation_rules[col][VRule.MAX_VALUE.value] = max_value
+        
+        if text_cols:
+            st.subheader("Text Columns")
+            for col in text_cols:
+                with st.expander(f"📝 {col}", expanded=col in validation_rules):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.checkbox("Check Nulls", key=f"nulls_{col}", 
+                                     value=validation_rules.get(col, {}).get(VRule.VALIDATE_NULLS.value, False)):
+                            validation_rules.setdefault(col, {})[VRule.VALIDATE_NULLS.value] = True
+                        
+                        if st.checkbox("Check Uniqueness", key=f"unique_{col}", 
+                                     value=validation_rules.get(col, {}).get(VRule.VALIDATE_UNIQUENESS.value, False)):
+                            validation_rules.setdefault(col, {})[VRule.VALIDATE_UNIQUENESS.value] = True
+                    
+                    with col2:
+                        # Allowed values section
+                        if st.checkbox("Check Allowed Values", key=f"domain_{col}"):
+                            values = st.text_input(
+                                "Allowed Values (comma separated)",
+                                value=",".join(validation_rules.get(col, {}).get(VRule.VALIDATE_LIST_OF_VALUES.value, [])),
+                                key=f"domain_values_{col}"
+                            )
+                            validation_rules.setdefault(col, {})[VRule.VALIDATE_LIST_OF_VALUES.value] = \
+                                [val.strip() for val in values.split(',') if val.strip()]
+                        
+                        # Regex pattern section
+                        if st.checkbox("Check Format (Regex)", key=f"regex_{col}"):
+                            pattern = st.text_input(
+                                "Regex Pattern",
+                                value=validation_rules.get(col, {}).get(VRule.VALIDATE_REGEX.value, ""),
+                                key=f"regex_pattern_{col}"
+                            )
+                            validation_rules.setdefault(col, {})[VRule.VALIDATE_REGEX.value] = pattern
+
+        # Save validation rules
+        st.session_state.validation_rules = validation_rules
+        
+        # Show current configuration
+        if st.checkbox("Show Current Configuration"):
+            st.json(validation_rules)
+    
+    with main_tabs[1]:
+        st.markdown('<div class="validation-card">', unsafe_allow_html=True)
+        
+        # Quick guide section
+        with st.expander("🎓 Quick Guide to Business Rules", expanded=True):
+            st.markdown("""
+                ### How to Create Business Rules
+                1. **Click 'Create New Rule'** to start
+                2. **Name your rule** meaningfully
+                3. **Add IF conditions** to define when the rule applies
+                4. **Add THEN conditions** to specify what should be true
+                
+                ### Example Scenarios:
+                - If status is 'Active', then balance must be > 0
+                - If category is 'Premium', then discount must be <= 20%
+                - If department is 'Sales', then region cannot be empty
+            """)
+        
+        # Interactive example section
+        with st.expander("🔍 Try an Example Rule"):
+            st.markdown("### Sample Rule: Status-Balance Check")
+            if st.button("Load Example"):
+                example_rule = {
+                    'name': 'Active Account Balance Check',
+                    'conditions': [
+                        {'column': 'status', 'operator': 'equals', 'value': 'Active'}
+                    ],
+                    'then': [
+                        {'column': 'balance', 'operator': 'greater_than', 'value': '0'}
+                    ]
+                }
+                st.session_state.current_rule = example_rule
+                st.success("Example rule loaded! Click 'Create New Rule' to try it.")
+        
+        # Rule creation button
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown("### Business Rules")
+        with col2:
+            if st.button("➕ Create New Rule", type="primary", use_container_width=True):
+                st.session_state.show_rule_dialog = True
+
+        if st.session_state.get("show_rule_dialog", False):
+            # Create a modal-like container with styling
+            st.markdown("""
+                <style>
+                    .modal-container {
+                        background-color: var(--background-color);
+                        border: 1px solid var(--primary-color);
+                        border-radius: 0.5rem;
+                        padding: 2rem;
+                        margin: 1rem 0;
+                        position: relative;
+                    }
+                    .modal-header {
+                        margin-bottom: 1.5rem;
+                        padding-bottom: 1rem;
+                        border-bottom: 1px solid rgba(250, 250, 250, 0.2);
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+
+            with st.container():
+                st.markdown('<div class="modal-container">', unsafe_allow_html=True)
+                st.markdown('<div class="modal-header">', unsafe_allow_html=True)
+                st.markdown("### Create Business Rule")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # Rule name with help text
+                rule_name = st.text_input("Rule Name", value=st.session_state.get("rule_name", ""),
+                            help="Enter a descriptive name for your rule")
+
+                # IF section
+                st.subheader("IF Conditions")
+                st.markdown("*Define when this rule should apply*")
+                cols = st.columns([2, 2, 1, 2])
+                with cols[0]:
+                    column = st.selectbox("Column", st.session_state.columns, key="if_column")
+                with cols[1]:
+                    operator = st.selectbox("Operator", list(COMPARISON_OPERATORS.keys()), 
+                                          key="if_operator",
+                                          help="Choose how to compare values")
+                with cols[2]:
+                    value_type = st.selectbox("Type", ["Value", "Column"], key="if_value_type")
+                with cols[3]:
+                    if value_type == "Column":
+                        value = st.selectbox("Compare with column", st.session_state.columns, key="if_value_col")
                     else:
-                        validation_rules[col][VRule.MIN_VALUE.value] = None
-                    has_max = st.checkbox("Set Maximum", key=f"has_max_{col}", value=validation_rules.get(col, {}).get(VRule.MAX_VALUE.value) is not None)
-                    if has_max:
-                        max_value = st.number_input("Maximum Value", key=f"max_{col}", value=validation_rules.get(col, {}).get(VRule.MAX_VALUE.value, 0.0))
-                        validation_rules[col][VRule.MAX_VALUE.value] = max_value
+                        value = st.text_input("Value", key="if_value_input")
+                
+                if st.button("Add IF Condition"):
+                    if all([column, operator, value]):
+                        new_condition = {
+                            'column': column,
+                            'operator': operator,
+                            'value': value,
+                            'value_type': value_type.lower()
+                        }
+                        if 'current_rule' not in st.session_state:
+                            st.session_state.current_rule = {'name': '', 'conditions': [], 'then': []}
+                        st.session_state.current_rule['conditions'].append(new_condition)
+                        st.rerun()
+
+                # Display current conditions
+                if st.session_state.get('current_rule', {}).get('conditions'):
+                    st.markdown("**Current Conditions:**")
+                    for i, cond in enumerate(st.session_state.current_rule['conditions']):
+                        st.info(f"{i+1}. {cond['column']} {cond['operator']} {cond['value']}")
+                
+                # THEN section
+                st.subheader("THEN Conditions")
+                st.markdown("*Define what should be true when conditions are met*")
+                cols = st.columns([2, 2, 1, 2])
+                with cols[0]:
+                    then_column = st.selectbox("Column", st.session_state.columns, key="then_column")
+                with cols[1]:
+                    then_operator = st.selectbox("Operator", list(COMPARISON_OPERATORS.keys()), 
+                                                key="then_operator",
+                                                help="Choose how to compare values")
+                with cols[2]:
+                    then_value_type = st.selectbox("Type", ["Value", "Column"], key="then_value_type")
+                with cols[3]:
+                    if then_value_type == "Column":
+                        then_value = st.selectbox("Compare with column", st.session_state.columns, key="then_value_col")
                     else:
-                        validation_rules[col][VRule.MAX_VALUE.value] = None
-    st.session_state.validation_rules = validation_rules
-    
-    if st.checkbox("Show Validation Configuration (JSON)"):
-        st.json(validation_rules)
+                        then_value = st.text_input("Value", key="then_value_input")
+                
+                if st.button("Add THEN Condition"):
+                    if all([then_column, then_operator, then_value]):
+                        new_then = {
+                            'column': then_column,
+                            'operator': then_operator,
+                            'value': then_value,
+                            'value_type': then_value_type.lower()
+                        }
+                        if 'current_rule' not in st.session_state:
+                            st.session_state.current_rule = {'name': '', 'conditions': [], 'then': []}
+                        st.session_state.current_rule['then'].append(new_then)
+                        st.rerun()
+
+                # Display current then conditions
+                if st.session_state.get('current_rule', {}).get('then'):
+                    st.markdown("**Current THEN Conditions:**")
+                    for i, cond in enumerate(st.session_state.current_rule['then']):
+                        st.info(f"{i+1}. {cond['column']} {cond['operator']} {cond['value']}")
+
+                # Action buttons at the bottom
+                col1, col2, col3 = st.columns([6, 3, 3])
+                with col2:
+                    if st.button("Save Rule", type="primary", use_container_width=True):
+                        if rule_name and st.session_state.current_rule.get('conditions') and st.session_state.current_rule.get('then'):
+                            new_rule = {
+                                'name': rule_name,
+                                'conditions': st.session_state.current_rule['conditions'].copy(),
+                                'then': st.session_state.current_rule['then'].copy()
+                            }
+                            if 'business_rules' not in st.session_state:
+                                st.session_state.business_rules = []
+                            st.session_state.business_rules.append(new_rule)
+                            # Reset current rule
+                            st.session_state.current_rule = {'name': '', 'conditions': [], 'then': []}
+                            st.session_state.rule_name = ''
+                            st.session_state.show_rule_dialog = False
+                            st.rerun()
+                        else:
+                            st.error("Please fill all required fields")
+                
+                with col3:
+                    if st.button("Cancel", type="secondary", use_container_width=True):
+                        st.session_state.current_rule = {'name': '', 'conditions': [], 'then': []}
+                        st.session_state.rule_name = ''
+                        st.session_state.show_rule_dialog = False
+                        st.rerun()
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        # Display existing rules with improved layout
+        if st.session_state.business_rules:
+            for i, rule in enumerate(st.session_state.business_rules):
+                with st.container():
+                    st.markdown('<div class="validation-card">', unsafe_allow_html=True)
+                    col1, col2, col3 = st.columns([1, 8, 1])
+                    
+                    col1.markdown(f"**{i+1}.**")
+                    with col2:
+                        st.markdown(f"**{rule['name']}**")
+                        st.info(format_rule_as_sentence(rule))
+                        with st.expander("View Details"):
+                            st.json(rule)
+                    
+                    if col3.button("🗑️", key=f"delete_rule_{i}", help="Delete rule"):
+                        st.session_state.business_rules.pop(i)
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("No business rules defined yet. Click 'Create New Rule' to get started!")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
     
     step_navigation()
 
 def handle_data_validation():
     st.header("Step 6: Execute Data Validation")
     
-    if not st.session_state.get("validation_rules"):
-        st.error("Please define validation rules first.")
+    # Check if we have any validation rules or business rules
+    validation_rules = st.session_state.get("validation_rules", {})
+    business_rules = st.session_state.get("business_rules", [])
+    
+    if not validation_rules and not business_rules:
+        st.error("Please define at least one validation rule or business rule before proceeding.")
         step_navigation(next=False)
         return
     
     df_target = st.session_state.get("df_target")
-    validation_rules = st.session_state.get("validation_rules", {})
-    if df_target is None or not validation_rules:
-        st.error("Target data and validation rules are required.")
+    if df_target is None:
+        st.error("Target data is required for validation.")
+        step_navigation(next=False)
         return
     
-    results = DataValidator.execute_validation(df_target, validation_rules)
-    st.session_state.validation_results = results
+    # Execute standard validation rules if they exist
+    if validation_rules:
+        st.subheader("Standard Validation Rules")
+        results = DataValidator.execute_validation(df_target, validation_rules)
+        st.session_state.validation_results = results
+        
+        display_validation_summary(results)
+        display_detailed_validation_results(df_target, results, validation_rules)
     
-    display_validation_summary(results)
-    display_detailed_validation_results(df_target, results, validation_rules)
-    
-    step_navigation()
+    # Execute business rules validation if they exist
+    if business_rules:
+        st.subheader("Business Rules Validation")
+        violations = validate_all_business_rules(df_target)
+        if violations:
+            st.error("Business rules violations found:")
+            for rule_name, rule_violations in violations.items():
+                # Find the rule object
+                rule = next((r for r in st.session_state.business_rules if r['name'] == rule_name), None)
+                if rule:
+                    st.markdown(f"### Rule: {rule_name}")
+                    # Show rule in plain language
+                    st.info(format_rule_as_sentence(rule))
+                    
+                    # Show violations
+                    st.markdown(f"**Violations Found:** {len(rule_violations)}")
+                    with st.expander("View Violations"):
+                        st.dataframe(df_target.loc[rule_violations])
+        else:
+            st.success("All business rules passed!")
+
+    # Only show next step if we have results
+    if validation_rules or (business_rules and len(business_rules) > 0):
+        step_navigation()
+    else:
+        step_navigation(next=False)
 
 def handle_report_summary():
     st.header("Final Report Summary for Audit")
@@ -567,6 +939,25 @@ def handle_report_summary():
         )
     else:
         st.info("No validation results available.")
+    
+    # Add business rules section to the report
+    st.subheader("Business Rules Summary")
+    if st.session_state.business_rules:
+        st.write(f"Total Business Rules: {len(st.session_state.business_rules)}")
+        for rule in st.session_state.business_rules:
+            with st.expander(f"Rule: {rule['name']}", expanded=False):
+                st.json(rule)
+        
+        # Include business rules validation results if available
+        violations = validate_all_business_rules(st.session_state.get("df_target"))
+        if violations:
+            st.error("Business Rules Violations Summary:")
+            for rule_name, rule_violations in violations.items():
+                st.write(f"Rule '{rule_name}': {len(rule_violations)} violations")
+        else:
+            st.success("All business rules passed!")
+    else:
+        st.info("No business rules defined")
     
     # Prepare a downloadable report (JSON content used for PDF)
     report = {

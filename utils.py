@@ -757,3 +757,148 @@ def generate_soda_yaml(validation_rules: Dict[str, Dict[str, Any]], table_name: 
                 })
     
     return yaml.dump(soda_checks, sort_keys=False, allow_unicode=True)
+
+def validate_business_rule(rule, df):
+    """Validates a single business rule against the dataframe."""
+    try:
+        mask = pd.Series(True, index=df.index)
+        
+        # Apply all conditions
+        for condition in rule['conditions']:
+            col = condition['column']
+            op = condition['operator']
+            val = condition['value']
+            
+            # Convert value to numeric if possible
+            try:
+                numeric_val = float(val)
+                numeric_col = pd.to_numeric(df[col], errors='coerce')
+                is_numeric = True
+            except ValueError:
+                numeric_val = None
+                numeric_col = None
+                is_numeric = False
+            
+            if op == 'equals':
+                mask &= df[col].astype(str) == str(val)
+            elif op == 'not_equals':
+                mask &= df[col].astype(str) != str(val)
+            elif op == 'contains':
+                mask &= df[col].astype(str).str.contains(str(val), na=False)
+            elif op == 'is_null':
+                mask &= df[col].isna()
+            elif op == 'is_not_null':
+                mask &= df[col].notna()
+            elif is_numeric:
+                if op == 'greater_than':
+                    mask &= numeric_col > numeric_val
+                elif op == 'less_than':
+                    mask &= numeric_col < numeric_val
+                elif op == 'greater_equal':
+                    mask &= numeric_col >= numeric_val
+                elif op == 'less_equal':
+                    mask &= numeric_col <= numeric_val
+        
+        # Check 'then' conditions where mask is True
+        violations = []
+        for then_condition in rule['then']:
+            col = then_condition['column']
+            op = then_condition['operator']
+            val = then_condition['value']
+            
+            # Convert value to numeric if possible for 'then' conditions
+            try:
+                numeric_val = float(val)
+                numeric_col = pd.to_numeric(df[col], errors='coerce')
+                is_numeric = True
+            except ValueError:
+                numeric_val = None
+                numeric_col = None
+                is_numeric = False
+            
+            # Apply validation only where conditions are met
+            validation_mask = mask.copy()
+            if op == 'equals':
+                validation_mask &= df[col].astype(str) != str(val)
+            elif op == 'not_equals':
+                validation_mask &= df[col].astype(str) == str(val)
+            elif op == 'contains':
+                validation_mask &= ~df[col].astype(str).str.contains(str(val), na=False)
+            elif op == 'is_null':
+                validation_mask &= df[col].notna()
+            elif op == 'is_not_null':
+                validation_mask &= df[col].isna()
+            elif is_numeric:
+                if op == 'greater_than':
+                    validation_mask &= numeric_col <= numeric_val
+                elif op == 'less_than':
+                    validation_mask &= numeric_col >= numeric_val
+                elif op == 'greater_equal':
+                    validation_mask &= numeric_col < numeric_val
+                elif op == 'less_equal':
+                    validation_mask &= numeric_col > numeric_val
+            
+            violations.extend(df[validation_mask].index.tolist())
+            
+        return list(set(violations))
+    except Exception as e:
+        logger.error(f"Error validating rule: {str(e)}")
+        return f"Error validating rule: {str(e)}"
+
+def validate_all_business_rules(df):
+    """Validates all business rules and returns violations."""
+    violations = {}
+    for rule in st.session_state.business_rules:
+        rule_violations = validate_business_rule(rule, df)
+        if rule_violations:
+            violations[rule['name']] = rule_violations
+    return violations
+
+def format_rule_as_sentence(rule: dict) -> str:
+    """Format a business rule as a readable sentence."""
+    try:
+        # Format IF conditions
+        if_parts = []
+        for condition in rule['conditions']:
+            operator_text = {
+                'equals': 'is equal to',
+                'not_equals': 'is not equal to',
+                'greater_than': 'is greater than',
+                'less_than': 'is less than',
+                'greater_equal': 'is greater than or equal to',
+                'less_equal': 'is less than or equal to',
+                'contains': 'contains',
+                'is_null': 'is empty',
+                'is_not_null': 'is not empty'
+            }.get(condition['operator'], condition['operator'])
+            
+            value_text = '' if condition['operator'] in ['is_null', 'is_not_null'] else f" {condition['value']}"
+            if_parts.append(f"{condition['column']} {operator_text}{value_text}")
+        
+        if_clause = " AND ".join(if_parts)
+        
+        # Format THEN conditions
+        then_parts = []
+        for then_cond in rule['then']:
+            operator_text = {
+                'equals': 'must be equal to',
+                'not_equals': 'must not be equal to',
+                'greater_than': 'must be greater than',
+                'less_than': 'must be less than',
+                'greater_equal': 'must be greater than or equal to',
+                'less_equal': 'must be less than or equal to',
+                'contains': 'must contain',
+                'is_null': 'must be empty',
+                'is_not_null': 'must not be empty'
+            }.get(then_cond['operator'], then_cond['operator'])
+            
+            value_text = '' if then_cond['operator'] in ['is_null', 'is_not_null'] else f" {then_cond['value']}"
+            then_parts.append(f"{then_cond['column']} {operator_text}{value_text}")
+        
+        then_clause = " AND ".join(then_parts)
+        
+        # Combine into full sentence
+        return f"IF {if_clause}, THEN {then_clause}"
+    except Exception as e:
+        logger.error(f"Error formatting rule: {str(e)}")
+        return "Error formatting rule"
