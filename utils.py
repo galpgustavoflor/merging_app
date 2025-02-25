@@ -681,82 +681,117 @@ def handle_large_file(file_path: str, chunk_size: int = 10000) -> pd.DataFrame:
         chunks.append(chunk)
     return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
 
-def generate_soda_yaml(validation_rules: Dict[str, Dict[str, Any]], table_name: str = "your_table") -> str:
-    """
-    Generate a SODA CLI YAML configuration from validation rules.
+def generate_soda_yaml(validation_config: dict, table_name: str, business_rules: list = None) -> str:
+    """Generate SODA YAML configuration from validation and business rules."""
     
-    Args:
-        validation_rules: Dictionary of validation rules
-        table_name: Name of the table to validate
-        
-    Returns:
-        str: YAML configuration for SODA CLI
-    """
-    soda_checks = {
-        "checks for " + table_name: []
-    }
+    sections = []
     
-    for col, rules in validation_rules.items():
-        # Null checks
-        if rules.get(VRule.VALIDATE_NULLs.value, False):
-            soda_checks["checks for " + table_name].append({
-                "name": f"Check nulls in {col}",
-                "not null": col
-            })
-        
-        # Uniqueness checks
-        if rules.get(VRule.VALIDATE_UNIQUENESS.value, False):
-            soda_checks["checks for " + table_name].append({
-                "name": f"Check uniqueness of {col}",
-                "unique": col
-            })
-        
-        # Value list checks
-        if VRule.VALIDATE_LIST_OF_VALUES.value in rules:
-            allowed_values = rules[VRule.VALIDATE_LIST_OF_VALUES.value]
-            soda_checks["checks for " + table_name].append({
-                "name": f"Check allowed values in {col}",
-                "valid values": {
-                    "column": col,
-                    "values": allowed_values
-                }
-            })
-        
-        # Regex pattern checks
-        if VRule.VALIDATE_REGEX.value in rules:
-            pattern = rules[VRule.VALIDATE_REGEX.value]
-            soda_checks["checks for " + table_name].append({
-                "name": f"Check format of {col}",
-                "regex match": {
-                    "column": col,
-                    "regex": pattern
-                }
-            })
-        
-        # Range checks
-        if rules.get(VRule.VALIDATE_RANGE.value, False):
-            min_val = rules.get(VRule.MIN_VALUE.value)
-            max_val = rules.get(VRule.MAX_VALUE.value)
+    # First section: Standard validation rules
+    if validation_config:
+        validation_checks = []
+        for column, rules in validation_config.items():
+            # Use VRule enum values for comparison
+            if rules.get(VRule.VALIDATE_NULLS.value, False):
+                validation_checks.append(f"  - not_null: {column}")
             
-            if min_val is not None:
-                soda_checks["checks for " + table_name].append({
-                    "name": f"Check minimum value of {col}",
-                    "min": {
-                        "column": col,
-                        "min": float(min_val)
-                    }
-                })
+            if rules.get(VRule.VALIDATE_UNIQUENESS.value, False):
+                validation_checks.append(f"  - unique: {column}")
             
-            if max_val is not None:
-                soda_checks["checks for " + table_name].append({
-                    "name": f"Check maximum value of {col}",
-                    "max": {
-                        "column": col,
-                        "max": float(max_val)
-                    }
-                })
+            if rules.get(VRule.VALIDATE_RANGE.value, False):
+                min_val = rules.get(VRule.MIN_VALUE.value)
+                max_val = rules.get(VRule.MAX_VALUE.value)
+                if min_val is not None:
+                    validation_checks.append(f"  - min_value: ")
+                    validation_checks.append(f"      column: {column}")
+                    validation_checks.append(f"      min_value: {min_val}")
+                if max_val is not None:
+                    validation_checks.append(f"  - max_value:")
+                    validation_checks.append(f"      column: {column}")
+                    validation_checks.append(f"      max_value: {max_val}")
+            
+            if VRule.VALIDATE_LIST_OF_VALUES.value in rules:
+                values = rules[VRule.VALIDATE_LIST_OF_VALUES.value]
+                if values:
+                    values_str = ", ".join([f"'{v}'" for v in values])
+                    validation_checks.append(f"  - values_in:")
+                    validation_checks.append(f"      column: {column}")
+                    validation_checks.append(f"      values: [{values_str}]")
+            
+            if VRule.VALIDATE_REGEX.value in rules:
+                regex = rules[VRule.VALIDATE_REGEX.value]
+                if regex:
+                    validation_checks.append(f"  - regex_match:")
+                    validation_checks.append(f"      column: {column}")
+                    validation_checks.append(f"      regex: '{regex}'")
+        
+        if validation_checks:
+            sections.append("# Standard Validation Rules")
+            sections.extend(validation_checks)
+            sections.append("")  # Add empty line between sections
     
-    return yaml.dump(soda_checks, sort_keys=False, allow_unicode=True)
+    # Second section: Business rules
+    if business_rules:
+        sections.append("# Business Rules")
+        for rule in business_rules:
+            rule_name = rule['name'].lower().replace(' ', '_')
+            conditions = []
+            
+            # Convert IF conditions
+            for cond in rule['conditions']:
+                operator_map = {
+                    'equals': '=',
+                    'not_equals': '!=',
+                    'greater_than': '>',
+                    'less_than': '<',
+                    'greater_equals': '>=',
+                    'less_equals': '<='
+                }
+                op = operator_map.get(cond['operator'], '=')
+                value_type = cond.get('value_type', 'value').lower()
+                
+                if value_type == 'column':
+                    conditions.append(f"{cond['column']} {op} {cond['value']}")
+                else:
+                    try:
+                        float(cond['value'])
+                        conditions.append(f"{cond['column']} {op} {cond['value']}")
+                    except (ValueError, TypeError):
+                        conditions.append(f"{cond['column']} {op} '{cond['value']}'")
+            
+            # Convert THEN conditions
+            for then in rule['then']:
+                op = operator_map.get(then['operator'], '=')
+                value_type = then.get('value_type', 'value').lower()
+                
+                if value_type == 'column':
+                    then_condition = f"{then['column']} {op} {then['value']}"
+                else:
+                    try:
+                        float(then['value'])
+                        then_condition = f"{then['column']} {op} {then['value']}"
+                    except (ValueError, TypeError):
+                        then_condition = f"{then['column']} {op} '{then['value']}'"
+                
+                # Create the full rule
+                if conditions:
+                    condition_str = " AND ".join(conditions)
+                    sections.append(f"  - custom_sql_expr: {rule_name}")
+                    sections.append(f"    expression: |-")
+                    sections.append(f"      CASE WHEN {condition_str}")
+                    sections.append(f"      THEN {then_condition}")
+                    sections.append(f"      ELSE TRUE END")
+    
+    # Combine all sections into YAML with proper spacing
+    if sections:
+        yaml_content = f"""table: {table_name}
+checks:
+{chr(10).join(sections)}"""
+    else:
+        yaml_content = f"""table: {table_name}
+checks:
+  # No validation rules or business rules defined"""
+    
+    return yaml_content
 
 def validate_business_rule(rule, df):
     """Validates a single business rule against the dataframe."""
@@ -901,4 +936,4 @@ def format_rule_as_sentence(rule: dict) -> str:
         return f"IF {if_clause}, THEN {then_clause}"
     except Exception as e:
         logger.error(f"Error formatting rule: {str(e)}")
-        return "Error formatting rule"
+        return "Error formatting rule: {str(e)}"

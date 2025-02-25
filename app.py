@@ -980,10 +980,24 @@ def handle_report_summary():
     
     st.subheader("SODA CLI Configuration")
     validation_config = st.session_state.get("validation_rules", {})
-    if validation_config:
+    business_rules = st.session_state.get("business_rules", [])
+    
+    if validation_config or business_rules:
         table_name = st.text_input("Table name for SODA checks", "your_table")
-        soda_yaml = generate_soda_yaml(validation_config, table_name)
         
+        # Debug info to verify the rules being passed
+        if st.checkbox("Debug validation rules"):
+            st.write("Validation rules:", validation_config)
+            st.write("Business rules:", business_rules)
+        
+        # Generate YAML with both types of rules
+        soda_yaml = generate_soda_yaml(
+            validation_config=validation_config,
+            table_name=table_name,
+            business_rules=business_rules
+        )
+        
+        # Display the generated YAML
         st.code(soda_yaml, language="yaml")
         
         # Add download button for SODA configuration
@@ -994,7 +1008,7 @@ def handle_report_summary():
             mime="text/yaml"
         )
     else:
-        st.info("No validation configuration available for SODA CLI.")
+        st.info("No validation configuration or business rules available for SODA CLI.")
   
 
     # Generate PDF report using report_json as content
