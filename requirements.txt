@@ -1,3 +1,4 @@
+# Core dependencies
 streamlit>=1.24.0
 pandas>=1.5.0
 numpy>=1.23.0
@@ -5,6 +6,19 @@ dask>=2023.3.0
 plotly>=5.13.0
 openpyxl>=3.1.0
 fpdf>=1.7.2
+
+# Data quality tools
+soda-core>=3.0.45
+great-expectations>=0.16.13
+duckdb>=0.8.1
+
+# Utility libraries
+python-dateutil>=2.8.2
+pyarrow>=12.0.0
+pyyaml>=6.0
+jinja2>=3.1.2
+rapidfuzz>=3.0.0  # Added for string similarity comparisons
+
 prometheus-client>=0.16.0
 pytest>=7.3.1
 pytest-cov>=4.0.0

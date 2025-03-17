@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .task-container {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        .progress-bar {
+            height: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #FF6600;
+            width: 0%; /* Will be updated by JS */
+            transition: width 0.3s ease-in-out;
+        }
+        .status-text {
+            font-size: 16px;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+        .status-pending {
+            color: #6c757d;
+        }
+        .status-running {
+            color: #FF6600;
+        }
+        .status-completed {
+            color: #28a745;
+        }
+        .status-failed {
+            color: #dc3545;
+        }
+        .status-details {
+            font-size: 14px;
+            margin-top: 5px;
+            color: #6c757d;
+        }
+        .elapsed-time {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="task-container">
+        <div class="status-text">Loading task status...</div>
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+        <div class="status-details"></div>
+        <div class="elapsed-time"></div>
+    </div>
+
+    <script>
+        // Task information
+        const taskId = "{{TASK_ID}}";
+        const pollInterval = parseInt("{{POLL_INTERVAL}}");
+        const startTime = Date.now();
+        
+        // DOM elements
+        const progressFill = document.querySelector('.progress-fill');
+        const statusText = document.querySelector('.status-text');
+        const statusDetails = document.querySelector('.status-details');
+        const elapsedTime = document.querySelector('.elapsed-time');
+        
+        // Task status constants
+        const STATUS = {
+            PENDING: "pending",
+            RUNNING: "running",
+            COMPLETED: "completed",
+            FAILED: "failed"
+        };
+        
+        // Initial status provided by server
+        let initialStatus = {{INITIAL_STATUS}};
+        
+        // Function to format elapsed time
+        function formatElapsedTime(milliseconds) {
+            const seconds = Math.floor(milliseconds / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            
+            const displaySeconds = seconds % 60;
+            const displayMinutes = minutes % 60;
+            
+            if (hours > 0) {
+                return `${hours}h ${displayMinutes}m ${displaySeconds}s`;
+            } else if (displayMinutes > 0) {
+                return `${displayMinutes}m ${displaySeconds}s`;
+            } else {
+                return `${displaySeconds}s`;
+            }
+        }
+        
+        // Function to update the task status display
+        function updateTaskStatus(status, progress, error) {
+            // Update progress bar
+            progressFill.style.width = `${progress * 100}%`;
+            
+            // Update status text and styling
+            statusText.textContent = `Task is ${status} (${Math.round(progress * 100)}%)`;
+            statusText.className = "status-text";
+            
+            // Add appropriate status class
+            switch(status) {
+                case STATUS.PENDING:
+                    statusText.classList.add("status-pending");
+                    statusDetails.textContent = "Waiting to start...";
+                    break;
+                case STATUS.RUNNING:
+                    statusText.classList.add("status-running");
+                    statusDetails.textContent = "Processing...";
+                    break;
+                case STATUS.COMPLETED:
+                    statusText.classList.add("status-completed");
+                    statusDetails.textContent = "Task completed successfully!";
+                    break;
+                case STATUS.FAILED:
+                    statusText.classList.add("status-failed");
+                    statusDetails.textContent = error || "Task failed.";
+                    break;
+            }
+            
+            // Update elapsed time
+            elapsedTime.textContent = `Elapsed: ${formatElapsedTime(Date.now() - startTime)}`;
+        }
+        
+        // Function to fetch task status using the Streamlit component message channel
+        function fetchTaskStatus() {
+            try {
+                // Use Streamlit component messaging
+                window.parent.postMessage({
+                    type: "streamlit:getTaskStatus",
+                    taskId: taskId
+                }, "*");
+                
+                return initialStatus;  // Return the initial status on first load
+            } catch (error) {
+                console.error("Error fetching task status:", error);
+                return {
+                    status: STATUS.FAILED,
+                    progress: 0,
+                    error: error.message
+                };
+            }
+        }
+        
+        // Listen for messages from parent window (Streamlit)
+        window.addEventListener("message", (event) => {
+            if (event.data.type === "streamlit:taskStatus") {
+                updateTaskStatus(
+                    event.data.status, 
+                    event.data.progress || 0, 
+                    event.data.error
+                );
+            }
+        });
+        
+        // Function to poll task status
+        function pollTaskStatus() {
+            const data = fetchTaskStatus();
+            
+            // Update UI with latest status
+            updateTaskStatus(data.status, data.progress || 0, data.error);
+            
+            // Set up auto-refresh if still running
+            if (data.status === STATUS.PENDING || data.status === STATUS.RUNNING) {
+                setTimeout(pollTaskStatus, pollInterval);
+            }
+        }
+        
+        // Start display with initial status
+        updateTaskStatus(
+            initialStatus.status, 
+            initialStatus.progress || 0, 
+            initialStatus.error
+        );
+        
+        // Start polling after a brief delay
+        setTimeout(pollTaskStatus, pollInterval);
+    </script>
+</body>
+</html>
